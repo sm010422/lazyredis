@@ -178,6 +178,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if a.statusText == "Refreshing…" {
 				a.setStatus("", false)
 			}
+			// Evict typeCache entries for keys that no longer exist.
+			existing := make(map[string]bool, len(msg.keys))
+			for _, k := range msg.keys {
+				existing[k] = true
+			}
+			for k := range a.typeCache {
+				if !existing[k] {
+					delete(a.typeCache, k)
+				}
+			}
 			prevSel := a.keys.Selected()
 			a.keys.SetKeys(msg.keys)
 			// restore cursor to previously selected key, or auto-select first
@@ -619,19 +629,19 @@ func (a *App) loadKeysPattern(pattern string) tea.Cmd {
 }
 
 func (a *App) loadTypesFor(keys []string) tea.Cmd {
-	return func() tea.Msg {
-		// Batch TYPE calls via pipeline
-		pipe := make(map[string]string, len(keys))
-		for _, k := range keys {
-			// simple sequential — fast enough for most use cases
-			info, err := a.redis.GetKeyInfo(k)
-			if err == nil && info != nil {
-				pipe[k] = string(info.Type)
-			}
+	// Only fetch types for keys not already in cache.
+	var missing []string
+	for _, k := range keys {
+		if _, ok := a.typeCache[k]; !ok {
+			missing = append(missing, k)
 		}
-		// We return this as a status message so the type cache gets updated
-		// indirectly. We use a side-effect approach here:
-		return typeCacheMsg(pipe)
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return func() tea.Msg {
+		// Single pipeline: one round-trip for all missing TYPE commands.
+		return typeCacheMsg(a.redis.GetKeyTypes(missing))
 	}
 }
 

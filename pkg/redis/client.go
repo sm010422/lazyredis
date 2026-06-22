@@ -115,6 +115,27 @@ func (c *Client) SelectDB(db int) error {
 	return c.rdb.Do(c.ctx, "SELECT", db).Err()
 }
 
+// GetKeyTypes returns key→type for all given keys using a single pipeline.
+// TYPE only — much cheaper than GetKeyInfo when you just need the badge.
+func (c *Client) GetKeyTypes(keys []string) map[string]string {
+	if len(keys) == 0 {
+		return nil
+	}
+	pipe := c.rdb.Pipeline()
+	cmds := make([]*goredis.StatusCmd, len(keys))
+	for i, k := range keys {
+		cmds[i] = pipe.Type(c.ctx, k)
+	}
+	pipe.Exec(c.ctx) //nolint:errcheck — individual cmd errors handled below
+	result := make(map[string]string, len(keys))
+	for i, k := range keys {
+		if cmds[i].Err() == nil {
+			result[k] = cmds[i].Val()
+		}
+	}
+	return result
+}
+
 // Scan uses SCAN cursor iteration to avoid blocking on large DBs.
 func (c *Client) Scan(pattern string) ([]string, error) {
 	if pattern == "" {
