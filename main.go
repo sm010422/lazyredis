@@ -10,20 +10,24 @@ import (
 	"github.com/parksangmin/lazyredis/pkg/ui"
 )
 
+var version = "0.2.0"
+
 func main() {
 	cfg := config.Parse()
 
-	redis := redisclient.New(cfg)
-	defer redis.Close()
+	r := redisclient.New(cfg)
+	defer r.Close()
 
-	model := ui.New(cfg, redis)
+	app := ui.New(cfg, r)
 
 	p := tea.NewProgram(
-		model,
+		app,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
 
+	// Route typeCacheMsg through Update2
+	_ = version
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
