@@ -3,103 +3,137 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	colorPrimary   = lipgloss.Color("#a6e3a1") // green
-	colorSecondary = lipgloss.Color("#89b4fa") // blue
-	colorAccent    = lipgloss.Color("#f38ba8") // red
-	colorWarning   = lipgloss.Color("#f9e2af") // yellow
-	colorMuted     = lipgloss.Color("#585b70") // surface2
-	colorText      = lipgloss.Color("#cdd6f4") // text
-	colorSubtext   = lipgloss.Color("#a6adc8") // subtext1
-	colorBg        = lipgloss.Color("#1e1e2e") // base
-	colorBorder    = lipgloss.Color("#45475a") // surface1
+	colorGreen   = lipgloss.Color("#a6e3a1")
+	colorBlue    = lipgloss.Color("#89b4fa")
+	colorRed     = lipgloss.Color("#f38ba8")
+	colorYellow  = lipgloss.Color("#f9e2af")
+	colorPurple  = lipgloss.Color("#cba6f7")
+	colorPeach   = lipgloss.Color("#fab387")
+	colorTeal    = lipgloss.Color("#89dceb")
+	colorMuted   = lipgloss.Color("#585b70")
+	colorText    = lipgloss.Color("#cdd6f4")
+	colorSubtext = lipgloss.Color("#a6adc8")
+	colorBorder  = lipgloss.Color("#45475a")
+	colorBorderActive = lipgloss.Color("#89b4fa")
+	colorBg2     = lipgloss.Color("#181825")
+	colorSurface = lipgloss.Color("#313244")
 
-	styleTitle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true)
+	styleBorder = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorBorder)
 
-	stylePanelBorder = lipgloss.NewStyle().
+	styleBorderActive = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorder)
-
-	stylePanelBorderActive = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorSecondary)
+				BorderForeground(colorBorderActive)
 
 	stylePanelTitle = lipgloss.NewStyle().
-			Foreground(colorSecondary).
-			Bold(true).
-			PaddingLeft(1)
-
-	styleSelected = lipgloss.NewStyle().
-			Foreground(colorBg).
-			Background(colorSecondary).
+			Foreground(colorBlue).
 			Bold(true)
 
-	styleKeyType = map[string]lipgloss.Style{
-		"string": lipgloss.NewStyle().Foreground(colorPrimary),
-		"list":   lipgloss.NewStyle().Foreground(colorSecondary),
-		"set":    lipgloss.NewStyle().Foreground(colorWarning),
-		"zset":   lipgloss.NewStyle().Foreground(lipgloss.Color("#cba6f7")),
-		"hash":   lipgloss.NewStyle().Foreground(lipgloss.Color("#fab387")),
-		"stream": lipgloss.NewStyle().Foreground(lipgloss.Color("#89dceb")),
+	styleSelected = lipgloss.NewStyle().
+			Foreground(colorBg2).
+			Background(colorBlue).
+			Bold(true)
+
+	styleSelectedAlt = lipgloss.NewStyle().
+				Foreground(colorBg2).
+				Background(colorPurple).
+				Bold(true)
+
+	styleKeyTypes = map[string]lipgloss.Style{
+		"string": lipgloss.NewStyle().Foreground(colorGreen),
+		"list":   lipgloss.NewStyle().Foreground(colorBlue),
+		"set":    lipgloss.NewStyle().Foreground(colorYellow),
+		"zset":   lipgloss.NewStyle().Foreground(colorPurple),
+		"hash":   lipgloss.NewStyle().Foreground(colorPeach),
+		"stream": lipgloss.NewStyle().Foreground(colorTeal),
 		"none":   lipgloss.NewStyle().Foreground(colorMuted),
 	}
 
-	styleStatusBar = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(colorMuted).
-			PaddingLeft(1).
-			PaddingRight(1)
+	styleBadgeTypes = map[string]lipgloss.Style{
+		"string": lipgloss.NewStyle().Foreground(colorBg2).Background(colorGreen).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"list":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorBlue).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"set":    lipgloss.NewStyle().Foreground(colorBg2).Background(colorYellow).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"zset":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorPurple).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"hash":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorPeach).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"stream": lipgloss.NewStyle().Foreground(colorBg2).Background(colorTeal).Bold(true).PaddingLeft(1).PaddingRight(1),
+	}
 
-	styleStatusKey = lipgloss.NewStyle().
-			Foreground(colorBg).
-			Background(colorSecondary).
+	styleError   = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
+	styleSuccess = lipgloss.NewStyle().Foreground(colorGreen)
+	styleWarning = lipgloss.NewStyle().Foreground(colorYellow)
+	styleInfo    = lipgloss.NewStyle().Foreground(colorSubtext)
+	styleMuted   = lipgloss.NewStyle().Foreground(colorMuted)
+	styleBold    = lipgloss.NewStyle().Foreground(colorText).Bold(true)
+	styleTTL     = lipgloss.NewStyle().Foreground(colorYellow)
+	styleTitle   = lipgloss.NewStyle().Foreground(colorGreen).Bold(true)
+
+	styleTabActive = lipgloss.NewStyle().
+			Foreground(colorBg2).
+			Background(colorBlue).
+			Bold(true).
+			PaddingLeft(2).
+			PaddingRight(2)
+
+	styleTabInactive = lipgloss.NewStyle().
+				Foreground(colorSubtext).
+				Background(colorSurface).
+				PaddingLeft(2).
+				PaddingRight(2)
+
+	styleStatusNormal = lipgloss.NewStyle().
+				Foreground(colorText).
+				Background(colorSurface)
+
+	styleStatusError = lipgloss.NewStyle().
+				Foreground(colorRed).
+				Background(colorSurface).
+				Bold(true)
+
+	styleStatusSuccess = lipgloss.NewStyle().
+				Foreground(colorGreen).
+				Background(colorSurface)
+
+	styleHintKey = lipgloss.NewStyle().
+			Foreground(colorBg2).
+			Background(colorMuted).
 			Bold(true).
 			PaddingLeft(1).
 			PaddingRight(1)
 
-	styleStatusVal = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(colorMuted).
-			PaddingLeft(1).
+	styleHintDesc = lipgloss.NewStyle().
+			Foreground(colorSubtext).
+			Background(colorSurface).
 			PaddingRight(1)
 
-	styleError = lipgloss.NewStyle().
-			Foreground(colorAccent).
-			Bold(true)
-
-	styleInfo = lipgloss.NewStyle().
-			Foreground(colorSubtext)
-
-	styleTTL = lipgloss.NewStyle().
-			Foreground(colorWarning)
-
-	styleFilterPrompt = lipgloss.NewStyle().
-				Foreground(colorPrimary).
-				Bold(true)
+	styleModalBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorPurple).
+				Padding(1, 2)
 )
 
 func keyTypeStyle(t string) lipgloss.Style {
-	if s, ok := styleKeyType[t]; ok {
+	if s, ok := styleKeyTypes[t]; ok {
 		return s
 	}
-	return lipgloss.NewStyle().Foreground(colorMuted)
+	return styleMuted
 }
 
-func keyTypeIcon(t string) string {
-	switch t {
-	case "string":
-		return "STR"
-	case "list":
-		return "LST"
-	case "set":
-		return "SET"
-	case "zset":
-		return "ZST"
-	case "hash":
-		return "HSH"
-	case "stream":
-		return "STM"
+func keyTypeBadge(t string) string {
+	abbr := map[string]string{
+		"string": "STR",
+		"list":   "LST",
+		"set":    "SET",
+		"zset":   "ZST",
+		"hash":   "HSH",
+		"stream": "STM",
 	}
-	return "???"
+	a, ok := abbr[t]
+	if !ok {
+		a = "???"
+	}
+	if s, ok := styleBadgeTypes[t]; ok {
+		return s.Render(a)
+	}
+	return styleMuted.Render("[" + a + "]")
 }
