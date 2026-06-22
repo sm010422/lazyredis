@@ -15,6 +15,13 @@ import (
 	redisclient "github.com/parksangmin/lazyredis/pkg/redis"
 )
 
+// msgBatchDelete carries a list of keys to remove from the panel after deletion.
+type msgBatchDeleted struct {
+	keys   []string
+	status string
+	err    error
+}
+
 // ---- tab ----
 
 type tabID int
@@ -82,13 +89,16 @@ type msgOpDoneWithNext struct {
 	nextKey string
 }
 type msgConnected struct {
-	client   *redisclient.Client
-	cfg      *config.Config
-	interval time.Duration
+	client       *redisclient.Client
+	cfg          *config.Config
+	interval     time.Duration
+	profileIdx   int
+	profileColor lipgloss.Color
 }
 type msgSettingsApplied struct {
 	interval time.Duration
 }
+type msgClearStatus struct{ gen int }
 
 // ---- App ----
 
@@ -108,6 +118,11 @@ type App struct {
 	typeCache       map[string]string // key -> type string
 	refreshInterval time.Duration     // 0 = off
 
+	// profiles
+	profiles        []config.Profile
+	activeProfileIdx int
+	profileColor    lipgloss.Color // active border color
+
 	// panels
 	keys   KeysPanel
 	value  ValueView
@@ -118,21 +133,29 @@ type App struct {
 	modal *Modal
 
 	// status bar
-	statusText  string
-	statusErr   bool
-	statusTimer int
+	statusText string
+	statusErr  bool
+	statusGen  int // incremented each setStatus; used to cancel stale clear timers
 
 	// command log (last N commands)
 	cmdLog []string
 }
 
-func New(cfg *config.Config, r *redisclient.Client) *App {
+func New(cfg *config.Config, r *redisclient.Client, profiles []config.Profile, activeIdx int) *App {
+	color := colorBorderActive
+	if activeIdx >= 0 && activeIdx < len(profiles) {
+		color = ProfileBorderColor(profiles[activeIdx].Color)
+	}
 	return &App{
-		cfg:       cfg,
-		redis:     r,
-		keys:      newKeysPanel(),
-		typeCache: make(map[string]string),
-		currentDB: cfg.DB,
+		cfg:              cfg,
+		redis:            r,
+		keys:             newKeysPanel(),
+		typeCache:        make(map[string]string),
+		currentDB:        cfg.DB,
+		refreshInterval:  2 * time.Second,
+		profiles:         profiles,
+		activeProfileIdx: activeIdx,
+		profileColor:     color,
 	}
 }
 
@@ -176,7 +199,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.connected = true
 			if a.statusText == "Refreshing…" {
-				a.setStatus("", false)
+				a.setStatus("", false) // explicit clear, no timer needed
 			}
 			// Evict typeCache entries for keys that no longer exist.
 			existing := make(map[string]bool, len(msg.keys))
@@ -243,29 +266,36 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-	case msgStatus:
-		a.setStatus(msg.text, msg.isError)
+	case msgClearStatus:
+		if msg.gen == a.statusGen {
+			a.statusText = ""
+			a.statusErr = false
+		}
 		return a, nil
+
+	case msgStatus:
+		return a, a.setStatus(msg.text, msg.isError)
 
 	case msgCmdResult:
 		entry := "> " + msg.cmd
+		var statusCmd tea.Cmd
 		if msg.err != nil {
 			entry += "\n  ERROR: " + msg.err.Error()
 			a.setStatus("Command error: "+msg.err.Error(), true)
 		} else {
 			entry += "\n  " + truncate(msg.result, 200)
-			a.setStatus("OK: "+truncate(msg.result, 60), false)
+			statusCmd = a.setStatus("OK: "+truncate(msg.result, 60), false)
 		}
 		a.addCmdLog(entry)
-		return a, nil
+		return a, statusCmd
 
 	case msgOpDone:
+		var cmds []tea.Cmd
 		if msg.err != nil {
 			a.setStatus(msg.err.Error(), true)
 		} else {
-			a.setStatus(msg.status, false)
+			cmds = append(cmds, a.setStatus(msg.status, false))
 		}
-		var cmds []tea.Cmd
 		if msg.reload {
 			cmds = append(cmds, a.loadKeys())
 			n, _ := a.redis.DBSize()
@@ -274,16 +304,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.reloadValue && a.value.Key != "" {
 			cmds = append(cmds, a.selectKey(a.value.Key))
 		}
-		if len(cmds) > 0 {
-			return a, tea.Batch(cmds...)
-		}
-		return a, nil
+		return a, tea.Batch(cmds...)
 
 	case msgOpDoneWithNext:
-		a.setStatus(msg.status, false)
+		statusCmd := a.setStatus(msg.status, false)
 		n, _ := a.redis.DBSize()
 		a.dbSize = n
-		return a, a.selectKey(msg.nextKey)
+		return a, tea.Batch(statusCmd, a.selectKey(msg.nextKey))
 
 	case msgSettingsApplied:
 		a.refreshInterval = msg.interval
@@ -291,8 +318,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.interval > 0 {
 			label = msg.interval.String()
 		}
-		a.setStatus("Auto-refresh: "+label, false)
-		return a, a.tickCmd()
+		statusCmd := a.setStatus("Auto-refresh: "+label, false)
+		return a, tea.Batch(statusCmd, a.tickCmd())
 
 	case msgConnected:
 		a.redis.Close()
@@ -304,12 +331,30 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.typeCache = make(map[string]string)
 		a.keys = newKeysPanel()
 		a.value.Reset()
+		if msg.profileIdx >= 0 {
+			a.activeProfileIdx = msg.profileIdx
+		}
+		if msg.profileColor != "" {
+			a.profileColor = msg.profileColor
+		}
 		tlsInfo := ""
 		if msg.cfg.TLS {
 			tlsInfo = " (TLS)"
 		}
-		a.setStatus(fmt.Sprintf("Connected to %s db%d%s", msg.cfg.Addr(), msg.cfg.DB, tlsInfo), false)
-		return a, tea.Batch(a.loadKeys(), a.loadServerInfo(), a.tickCmd())
+		statusCmd := a.setStatus(fmt.Sprintf("Connected to %s db%d%s", msg.cfg.Addr(), msg.cfg.DB, tlsInfo), false)
+		return a, tea.Batch(statusCmd, a.loadKeys(), a.loadServerInfo(), a.tickCmd())
+
+	case msgBatchDeleted:
+		if msg.err != nil {
+			a.setStatus(msg.err.Error(), true)
+			return a, nil
+		}
+		a.keys.RemoveKeys(msg.keys)
+		n, _ := a.redis.DBSize()
+		a.dbSize = n
+		statusCmd := a.setStatus(msg.status, false)
+		a.value.Reset()
+		return a, statusCmd
 
 	case typeCacheMsg:
 		for k, t := range msg {
@@ -421,7 +466,9 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 	case "j", "down":
 		if a.focus == focusKeyList {
 			if a.keys.MoveDown() {
-				return a, a.selectKey(a.keys.Selected())
+				if sel := a.keys.SelectedKey(); sel != "" {
+					return a, a.selectKey(sel)
+				}
 			}
 		} else {
 			a.value.ScrollDown()
@@ -431,7 +478,9 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 	case "k", "up":
 		if a.focus == focusKeyList {
 			if a.keys.MoveUp() {
-				return a, a.selectKey(a.keys.Selected())
+				if sel := a.keys.SelectedKey(); sel != "" {
+					return a, a.selectKey(sel)
+				}
 			}
 		} else {
 			a.value.ScrollUp()
@@ -472,16 +521,62 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-	// sub-item navigation (for list/hash/set/zset)
+	// sub-item navigation (for list/hash/set/zset) OR range-select in key list
 	case "J":
 		if a.focus == focusValue {
 			a.value.SubDown(a.subItemCount())
+		} else if a.focus == focusKeyList {
+			a.keys.ExtendSelectDown()
+			if sel := a.keys.SelectedKey(); sel != "" {
+				return a, a.selectKey(sel)
+			}
 		}
 		return a, nil
 	case "K":
 		if a.focus == focusValue {
 			a.value.SubUp()
+		} else if a.focus == focusKeyList {
+			a.keys.ExtendSelectUp()
+			if sel := a.keys.SelectedKey(); sel != "" {
+				return a, a.selectKey(sel)
+			}
 		}
+		return a, nil
+
+	// tree navigation
+	case "enter":
+		if a.focus == focusKeyList && !a.keys.filtering {
+			node := a.keys.SelectedNode()
+			if node != nil && node.kind == nodeDir {
+				a.keys.EnterDir()
+				return a, nil
+			}
+		}
+		return a, nil
+
+	case "backspace":
+		if a.focus == focusKeyList && !a.keys.filtering {
+			a.keys.ExitDir()
+			if sel := a.keys.SelectedKey(); sel != "" {
+				return a, a.selectKey(sel)
+			}
+			return a, nil
+		}
+		return a, nil
+
+	case "esc":
+		if a.focus == focusKeyList && !a.keys.filtering {
+			a.keys.GoRoot()
+			if sel := a.keys.SelectedKey(); sel != "" {
+				return a, a.selectKey(sel)
+			}
+			return a, nil
+		}
+		return a, nil
+
+	// multi-select (ctrl+space = ctrl+@ = NUL in many terminals)
+	case "ctrl+ ", "ctrl+space", "ctrl+@":
+		a.keys.ToggleSelect()
 		return a, nil
 
 	// --- filter ---
@@ -491,8 +586,8 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 
 	// --- refresh ---
 	case "r":
-		a.setStatus("Refreshing…", false)
-		return a, tea.Batch(a.loadKeys(), a.loadServerInfo())
+		statusCmd := a.setStatus("Refreshing…", false)
+		return a, tea.Batch(statusCmd, a.loadKeys(), a.loadServerInfo())
 
 	// --- operations ---
 	case "n":
@@ -505,7 +600,35 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 		return a, textinput.Blink
 
 	case "d":
-		sel := a.keys.Selected()
+		// Multi-select batch delete
+		if a.keys.HasSelection() {
+			keys := a.keys.SelectedLeafKeys()
+			msg := fmt.Sprintf("Delete %d selected keys? This cannot be undone.", len(keys))
+			a.modal = NewConfirmModal("Batch Delete", msg, func(r ModalResult) tea.Cmd {
+				if !r.Confirmed {
+					return nil
+				}
+				a.keys.ClearSelection()
+				return a.batchDeleteKeys(keys)
+			})
+			return a, nil
+		}
+		// Dir node delete (all keys with prefix)
+		if node := a.keys.SelectedNode(); node != nil && node.kind == nodeDir {
+			prefix := node.prefix
+			count := node.count
+			msg := fmt.Sprintf("Delete all %d keys under '%s'? This cannot be undone.", count, strings.TrimSuffix(prefix, ":"))
+			a.modal = NewConfirmModal("Delete Folder", msg, func(r ModalResult) tea.Cmd {
+				if !r.Confirmed {
+					return nil
+				}
+				keys := keysWithPrefix(a.keys.allKeys, prefix)
+				return a.batchDeleteKeys(keys)
+			})
+			return a, nil
+		}
+		// Single key delete
+		sel := a.keys.SelectedKey()
 		if sel == "" {
 			return a, nil
 		}
@@ -556,7 +679,10 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 	case "D":
 		return a, a.startDeleteSubItem()
 
-	case "c":
+	case "y":
+		return a.copyKeyName()
+
+	case "c", "Y":
 		return a.copyValue()
 
 	case ":":
@@ -580,6 +706,9 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 
 	case "S":
 		return a, a.openConnectModal()
+
+	case "p":
+		return a, a.openProfileModal()
 	}
 
 	return a, nil
@@ -593,8 +722,47 @@ func (a *App) handleServerTab(key string) (tea.Model, tea.Cmd) {
 		return a, a.loadServerInfo()
 	case "S":
 		return a, a.openConnectModal()
+	case "p":
+		return a, a.openProfileModal()
 	}
 	return a, nil
+}
+
+func (a *App) openProfileModal() tea.Cmd {
+	if len(a.profiles) == 0 {
+		return func() tea.Msg {
+			return msgStatus{text: "No profiles found. Edit ~/.config/lazyredis/config.json", isError: true}
+		}
+	}
+	names := make([]string, len(a.profiles))
+	colors := make([]string, len(a.profiles))
+	for i, p := range a.profiles {
+		names[i] = p.Name
+		colors[i] = p.Color
+	}
+	a.modal = NewProfileModal(names, colors, a.activeProfileIdx, func(r ModalResult) tea.Cmd {
+		if !r.Confirmed || len(r.Values) == 0 {
+			return nil
+		}
+		idx, _ := strconv.Atoi(r.Values[0])
+		if idx < 0 || idx >= len(a.profiles) {
+			return nil
+		}
+		p := a.profiles[idx]
+		return func() tea.Msg {
+			newCfg := p.ToConfig()
+			client, err := redisclient.New(newCfg)
+			if err != nil {
+				return msgStatus{text: "Connection error: " + err.Error(), isError: true}
+			}
+			if err := client.Ping(); err != nil {
+				client.Close()
+				return msgStatus{text: "Connection failed: " + err.Error(), isError: true}
+			}
+			return msgConnected{client: client, cfg: newCfg, interval: a.refreshInterval, profileIdx: idx, profileColor: ProfileBorderColor(p.Color)}
+		}
+	})
+	return textinput.Blink
 }
 
 func (a *App) openConnectModal() tea.Cmd {
@@ -729,6 +897,16 @@ func (a *App) loadValueData(key string, info *redisclient.KeyInfo) tea.Cmd {
 			stringValueCache[key] = strings.Join(lines, "\n")
 			return msgStringValue{val: strings.Join(lines, "\n")}
 		}
+	default:
+		// Redis module types (JSON, Vector Set, Time Series, etc.)
+		// Use raw GET or DO to fetch the serialized value.
+		return func() tea.Msg {
+			val, err := a.redis.GetModuleValue(key, string(info.Type))
+			if err != nil {
+				return msgStringValue{val: styleMuted.Render("(use : command to inspect this key)")}
+			}
+			return msgStringValue{val: val}
+		}
 	}
 	return nil
 }
@@ -786,7 +964,7 @@ func (a *App) applySettings(vals []string) tea.Cmd {
 			client.Close()
 			return msgStatus{text: "Connection failed: " + err.Error(), isError: true}
 		}
-		return msgConnected{client: client, cfg: newCfg, interval: interval}
+		return msgConnected{client: client, cfg: newCfg, interval: interval, profileIdx: -1}
 	}
 }
 
@@ -853,15 +1031,13 @@ func (a *App) createKey(name, typ, val string) tea.Cmd {
 
 func (a *App) deleteKey(key string) tea.Cmd {
 	return func() tea.Msg {
-		_, err := a.redis.Delete(key)
-		if err != nil {
+		if _, err := a.redis.Unlink(key); err != nil {
 			return msgOpDone{err: err}
 		}
 		a.keys.RemoveKey(key)
 		delete(a.typeCache, key)
 		a.value.Reset()
-		// auto-select the key now at the cursor position after removal
-		if next := a.keys.Selected(); next != "" {
+		if next := a.keys.SelectedKey(); next != "" {
 			return msgOpDoneWithNext{
 				msgOpDone: msgOpDone{status: fmt.Sprintf("Deleted '%s'", key)},
 				nextKey:   next,
@@ -1192,6 +1368,28 @@ func (a *App) startDeleteSubItem() tea.Cmd {
 	return nil
 }
 
+func (a *App) copyKeyName() (tea.Model, tea.Cmd) {
+	name := a.keys.SelectedKeyName()
+	if name == "" {
+		return a, nil
+	}
+	_ = clipboard.WriteAll(name)
+	return a, a.setStatus(fmt.Sprintf("Copied key: %s", truncate(name, 50)), false)
+}
+
+func (a *App) batchDeleteKeys(keys []string) tea.Cmd {
+	return func() tea.Msg {
+		err := a.redis.BatchUnlink(keys)
+		if err != nil {
+			return msgBatchDeleted{err: err}
+		}
+		return msgBatchDeleted{
+			keys:   keys,
+			status: fmt.Sprintf("Deleted %d keys", len(keys)),
+		}
+	}
+}
+
 func (a *App) copyValue() (tea.Model, tea.Cmd) {
 	key := a.keys.Selected()
 	if key == "" {
@@ -1220,12 +1418,10 @@ func (a *App) copyValue() (tea.Model, tea.Cmd) {
 		}
 	}
 	if text == "" {
-		a.setStatus("Nothing to copy", false)
-		return a, nil
+		return a, a.setStatus("Nothing to copy", false)
 	}
 	_ = clipboard.WriteAll(text)
-	a.setStatus(fmt.Sprintf("Copied to clipboard: %s", truncate(text, 40)), false)
-	return a, nil
+	return a, a.setStatus(fmt.Sprintf("Copied to clipboard: %s", truncate(text, 40)), false)
 }
 
 func (a *App) subItemCount() int {
@@ -1245,9 +1441,19 @@ func (a *App) subItemCount() int {
 	return 0
 }
 
-func (a *App) setStatus(text string, isErr bool) {
+// setStatus sets the status bar text and, for non-error messages, schedules
+// an auto-clear after 3 seconds so the hint bar returns automatically.
+func (a *App) setStatus(text string, isErr bool) tea.Cmd {
 	a.statusText = text
 	a.statusErr = isErr
+	a.statusGen++
+	if text == "" || isErr {
+		return nil
+	}
+	gen := a.statusGen
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return msgClearStatus{gen: gen}
+	})
 }
 
 func (a *App) addCmdLog(entry string) {
@@ -1342,7 +1548,7 @@ func (a *App) renderKeysLayout(bodyH int) string {
 	topH := bodyH * 65 / 100
 	botH := bodyH - topH
 
-	leftPanel := a.keys.Render(leftW, bodyH, a.focus == focusKeyList, a.typeCache)
+	leftPanel := a.keys.Render(leftW, bodyH, a.focus == focusKeyList, a.typeCache, a.profileColor)
 	valuePanel := a.value.Render(rightW, topH, a.focus == focusValue)
 	infoPanel := a.info.Render(rightW, botH, a.value.Info, a.cmdLog)
 
@@ -1358,11 +1564,13 @@ func (a *App) renderStatusBar() string {
 		content = styleStatusSuccess.Render(" ✓ " + a.statusText)
 	} else {
 		hints := [][]string{
-			{"j/k", "navigate"}, {"/", "filter"}, {"n", "new key"},
-			{"d", "delete"}, {"e", "edit"}, {"a", "add item"},
+			{"j/k", "navigate"}, {"/", "search"}, {"n", "new"},
+			{"d", "delete"}, {"e", "edit"}, {"a", "add"},
 			{"D", "del item"}, {"R", "rename"}, {"t", "TTL"},
-			{"c", "copy"}, {":", "command"}, {"[/]", "switch DB"},
-			{"S", "connect"}, {"?", "help"}, {"q", "quit"},
+			{"y", "copy key"}, {"Y", "copy val"}, {":", "cmd"},
+			{"J/K", "range sel"}, {"ctrl+space", "select"},
+			{"enter", "enter dir"}, {"←", "up dir"},
+			{"[/]", "DB"}, {"p", "profile"}, {"S", "connect"}, {"q", "quit"},
 		}
 		var parts []string
 		for _, h := range hints {
@@ -1390,10 +1598,21 @@ func (a *App) renderHelp(height int) string {
 		}},
 		{"Key Operations", [][]string{
 			{"n", "new key (type selector)"},
-			{"d", "delete key (confirm)"},
+			{"d", "delete key / folder / batch selection (confirm)"},
 			{"R", "rename key"},
 			{"t", "set / remove TTL"},
-			{"c", "copy value to clipboard"},
+			{"y", "copy key name to clipboard"},
+			{"Y / c", "copy value to clipboard"},
+		}},
+		{"Tree Navigation", [][]string{
+			{"enter", "enter folder"},
+			{"backspace", "go up one level"},
+			{"esc", "go to root"},
+		}},
+		{"Multi-Select", [][]string{
+			{"ctrl+space", "toggle selection on current item"},
+			{"J / K", "extend selection range down / up"},
+			{"d", "delete all selected items (batch)"},
 		}},
 		{"Value Editing", [][]string{
 			{"e", "edit selected item (string / list item / hash field / zset member)"},
@@ -1407,6 +1626,7 @@ func (a *App) renderHelp(height int) string {
 		}},
 		{"Global", [][]string{
 			{":", "run raw Redis command"},
+			{"p", "switch connection profile"},
 			{"S", "open connection settings (host / port / pass / db / TLS)"},
 			{"[  ]", "switch database (db0-db15)"},
 			{"r", "refresh keys + server info"},

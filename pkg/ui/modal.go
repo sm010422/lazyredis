@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type modalKind int
@@ -20,6 +21,7 @@ const (
 	modalTTL
 	modalCommand // raw command
 	modalConnect // connection settings
+	modalProfile // profile selector
 )
 
 type ModalResult struct {
@@ -44,6 +46,11 @@ type Modal struct {
 	tlsEnabled    bool
 	tlsSkipVerify bool
 	refreshIdx    int // index into refreshLabels
+
+	// for profile selector
+	profileNames  []string
+	profileColors []string
+	profileIdx    int
 
 	onDone func(ModalResult) tea.Cmd
 }
@@ -115,6 +122,22 @@ func NewTTLModal(key string, onDone func(ModalResult) tea.Cmd) *Modal {
 	}
 }
 
+// NewProfileModal creates a profile selector modal.
+// names and colors are parallel slices; current is the index of the active profile.
+func NewProfileModal(names, colors []string, current int, onDone func(ModalResult) tea.Cmd) *Modal {
+	if current < 0 || current >= len(names) {
+		current = 0
+	}
+	return &Modal{
+		Kind:          modalProfile,
+		Title:         "Switch Profile",
+		profileNames:  names,
+		profileColors: colors,
+		profileIdx:    current,
+		onDone:        onDone,
+	}
+}
+
 func NewCommandModal(onDone func(ModalResult) tea.Cmd) *Modal {
 	in := newInput("e.g. SET foo bar / GET foo / HGETALL myhash", 512)
 	in.Focus()
@@ -178,6 +201,26 @@ func NewNewKeyModal(onDone func(ModalResult) tea.Cmd) *Modal {
 
 func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 	switch m.Kind {
+	case modalProfile:
+		switch msg.String() {
+		case "esc", "p":
+			return nil, m.onDone(ModalResult{Confirmed: false})
+		case "j", "down":
+			if m.profileIdx < len(m.profileNames)-1 {
+				m.profileIdx++
+			}
+		case "k", "up":
+			if m.profileIdx > 0 {
+				m.profileIdx--
+			}
+		case "enter":
+			return nil, m.onDone(ModalResult{
+				Confirmed: true,
+				Values:    []string{fmt.Sprintf("%d", m.profileIdx)},
+			})
+		}
+		return m, nil
+
 	case modalConfirm:
 		switch msg.String() {
 		case "y", "Y":
@@ -358,6 +401,28 @@ func (m *Modal) View(width int) string {
 	}
 
 	switch m.Kind {
+	case modalProfile:
+		for i, name := range m.profileNames {
+			color := ""
+			if i < len(m.profileColors) {
+				color = m.profileColors[i]
+			}
+			dot := styleMuted.Render("●")
+			if color != "" {
+				dot = lipgloss.NewStyle().Foreground(ProfileBorderColor(color)).Render("●")
+			}
+			if i == m.profileIdx {
+				lines = append(lines, dot+" "+styleSelected.Render(" "+name+" "))
+			} else {
+				lines = append(lines, dot+" "+styleInfo.Render(name))
+			}
+		}
+		lines = append(lines, "")
+		lines = append(lines,
+			styleHintKey.Render("j/k")+" "+styleHintDesc.Render("navigate")+"  "+
+				styleHintKey.Render("enter")+" "+styleHintDesc.Render("connect")+"  "+
+				styleHintKey.Render("esc")+" "+styleHintDesc.Render("cancel"))
+
 	case modalConnect:
 		inputLabels := []string{"Host:", "Port:", "Password:", "DB:"}
 		for i, label := range inputLabels {

@@ -156,8 +156,67 @@ func (v *ValueView) renderString(w, h int) string {
 		return v.paginate(lines, w, h)
 	}
 
+	// Hex dump for binary / non-printable data
+	if isBinary(raw) {
+		lines := hexDump([]byte(raw), w)
+		return v.paginate(lines, w, h)
+	}
+
 	lines := strings.Split(raw, "\n")
 	return v.paginate(lines, w, h)
+}
+
+// isBinary returns true if the string contains non-printable, non-UTF8 bytes.
+func isBinary(s string) bool {
+	for _, r := range s {
+		if r == '\n' || r == '\r' || r == '\t' {
+			continue
+		}
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
+// hexDump renders bytes as a classic hex dump:
+//
+//	00000000:  48 65 6c 6c 6f  |Hello|
+func hexDump(data []byte, w int) []string {
+	const cols = 16
+	var lines []string
+	for i := 0; i < len(data); i += cols {
+		end := i + cols
+		if end > len(data) {
+			end = len(data)
+		}
+		row := data[i:end]
+
+		hexParts := make([]string, cols)
+		printable := make([]byte, cols)
+		for j := 0; j < cols; j++ {
+			if j < len(row) {
+				hexParts[j] = fmt.Sprintf("%02x", row[j])
+				if row[j] >= 0x20 && row[j] < 0x7f {
+					printable[j] = row[j]
+				} else {
+					printable[j] = '.'
+				}
+			} else {
+				hexParts[j] = "  "
+				printable[j] = ' '
+			}
+		}
+
+		addr := styleMuted.Render(fmt.Sprintf("%08x: ", i))
+		hex1 := styleInfo.Render(strings.Join(hexParts[:8], " "))
+		hex2 := styleInfo.Render(strings.Join(hexParts[8:], " "))
+		asc := stylePanelTitle.Render("|" + string(printable[:len(row)]) + "|")
+		line := addr + hex1 + "  " + hex2 + "  " + asc
+		_ = w // lines may exceed w; paginate truncates
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 func (v *ValueView) renderList(w, h int) string {

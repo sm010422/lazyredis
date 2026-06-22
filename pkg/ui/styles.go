@@ -40,23 +40,33 @@ var (
 				Background(colorPurple).
 				Bold(true)
 
+	colorPink    = lipgloss.Color("#f5c2e7")
+
 	styleKeyTypes = map[string]lipgloss.Style{
-		"string": lipgloss.NewStyle().Foreground(colorGreen),
-		"list":   lipgloss.NewStyle().Foreground(colorBlue),
-		"set":    lipgloss.NewStyle().Foreground(colorYellow),
-		"zset":   lipgloss.NewStyle().Foreground(colorPurple),
-		"hash":   lipgloss.NewStyle().Foreground(colorPeach),
-		"stream": lipgloss.NewStyle().Foreground(colorTeal),
-		"none":   lipgloss.NewStyle().Foreground(colorMuted),
+		"string":      lipgloss.NewStyle().Foreground(colorGreen),
+		"list":        lipgloss.NewStyle().Foreground(colorBlue),
+		"set":         lipgloss.NewStyle().Foreground(colorYellow),
+		"zset":        lipgloss.NewStyle().Foreground(colorPurple),
+		"hash":        lipgloss.NewStyle().Foreground(colorPeach),
+		"stream":      lipgloss.NewStyle().Foreground(colorTeal),
+		"ReJSON-RL":   lipgloss.NewStyle().Foreground(colorPink),
+		"json":        lipgloss.NewStyle().Foreground(colorPink),
+		"vectorset":   lipgloss.NewStyle().Foreground(colorTeal),
+		"TSDB-TYPE":   lipgloss.NewStyle().Foreground(colorSubtext),
+		"none":        lipgloss.NewStyle().Foreground(colorMuted),
 	}
 
 	styleBadgeTypes = map[string]lipgloss.Style{
-		"string": lipgloss.NewStyle().Foreground(colorBg2).Background(colorGreen).Bold(true).PaddingLeft(1).PaddingRight(1),
-		"list":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorBlue).Bold(true).PaddingLeft(1).PaddingRight(1),
-		"set":    lipgloss.NewStyle().Foreground(colorBg2).Background(colorYellow).Bold(true).PaddingLeft(1).PaddingRight(1),
-		"zset":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorPurple).Bold(true).PaddingLeft(1).PaddingRight(1),
-		"hash":   lipgloss.NewStyle().Foreground(colorBg2).Background(colorPeach).Bold(true).PaddingLeft(1).PaddingRight(1),
-		"stream": lipgloss.NewStyle().Foreground(colorBg2).Background(colorTeal).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"string":    lipgloss.NewStyle().Foreground(colorBg2).Background(colorGreen).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"list":      lipgloss.NewStyle().Foreground(colorBg2).Background(colorBlue).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"set":       lipgloss.NewStyle().Foreground(colorBg2).Background(colorYellow).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"zset":      lipgloss.NewStyle().Foreground(colorBg2).Background(colorPurple).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"hash":      lipgloss.NewStyle().Foreground(colorBg2).Background(colorPeach).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"stream":    lipgloss.NewStyle().Foreground(colorBg2).Background(colorTeal).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"ReJSON-RL": lipgloss.NewStyle().Foreground(colorBg2).Background(colorPink).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"json":      lipgloss.NewStyle().Foreground(colorBg2).Background(colorPink).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"vectorset": lipgloss.NewStyle().Foreground(colorBg2).Background(colorTeal).Bold(true).PaddingLeft(1).PaddingRight(1),
+		"TSDB-TYPE": lipgloss.NewStyle().Foreground(colorBg2).Background(colorSubtext).Bold(true).PaddingLeft(1).PaddingRight(1),
 	}
 
 	styleError   = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
@@ -112,6 +122,31 @@ var (
 				Padding(1, 2)
 )
 
+// ProfileBorderColor maps profile color names to lipgloss colors.
+func ProfileBorderColor(color string) lipgloss.Color {
+	switch color {
+	case "green":
+		return colorGreen
+	case "red":
+		return colorRed
+	case "yellow":
+		return colorYellow
+	case "purple":
+		return colorPurple
+	case "peach":
+		return colorPeach
+	case "teal":
+		return colorTeal
+	case "pink":
+		return colorPink
+	default:
+		if len(color) > 0 && color[0] == '#' {
+			return lipgloss.Color(color)
+		}
+		return colorBorderActive
+	}
+}
+
 func keyTypeStyle(t string) lipgloss.Style {
 	if s, ok := styleKeyTypes[t]; ok {
 		return s
@@ -121,12 +156,16 @@ func keyTypeStyle(t string) lipgloss.Style {
 
 func keyTypeBadge(t string) string {
 	abbr := map[string]string{
-		"string": "STR",
-		"list":   "LST",
-		"set":    "SET",
-		"zset":   "ZST",
-		"hash":   "HSH",
-		"stream": "STM",
+		"string":    "STR",
+		"list":      "LST",
+		"set":       "SET",
+		"zset":      "ZST",
+		"hash":      "HSH",
+		"stream":    "STM",
+		"ReJSON-RL": "JSON",
+		"json":      "JSON",
+		"vectorset": "VEC",
+		"TSDB-TYPE": "TS",
 	}
 	a, ok := abbr[t]
 	if !ok {

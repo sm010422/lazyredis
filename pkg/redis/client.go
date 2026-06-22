@@ -342,6 +342,30 @@ func (c *Client) Delete(keys ...string) (int64, error) {
 	return c.rdb.Del(c.ctx, keys...).Result()
 }
 
+// Unlink asynchronously deletes keys (non-blocking). Falls back to DEL if unavailable.
+func (c *Client) Unlink(keys ...string) (int64, error) {
+	n, err := c.rdb.Unlink(c.ctx, keys...).Result()
+	if err != nil {
+		return c.Delete(keys...)
+	}
+	return n, nil
+}
+
+// BatchUnlink deletes keys in chunks to avoid blocking Redis.
+func (c *Client) BatchUnlink(keys []string) error {
+	const chunkSize = 500
+	for i := 0; i < len(keys); i += chunkSize {
+		end := i + chunkSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		if _, err := c.Unlink(keys[i:end]...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Client) Rename(oldKey, newKey string) error {
 	return c.rdb.Rename(c.ctx, oldKey, newKey).Err()
 }
@@ -422,6 +446,33 @@ func (c *Client) GetRawInfo(section string) (string, error) {
 		return c.rdb.Info(c.ctx).Result()
 	}
 	return c.rdb.Info(c.ctx, section).Result()
+}
+
+// GetModuleValue fetches the value of a Redis module key (JSON, TimeSeries, etc.)
+// using the appropriate module command where possible, otherwise falls back to a hint.
+func (c *Client) GetModuleValue(key, typ string) (string, error) {
+	switch typ {
+	case "ReJSON-RL", "json":
+		raw, err := c.rdb.Do(c.ctx, "JSON.GET", key).Text()
+		if err != nil {
+			return "", err
+		}
+		return raw, nil
+	case "TSDB-TYPE":
+		raw, err := c.rdb.Do(c.ctx, "TS.INFO", key).Result()
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%v", raw), nil
+	case "vectorset":
+		raw, err := c.rdb.Do(c.ctx, "VCARD", key).Result()
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Vector Set  (%v elements)\n\nUse : VRANDMEMBER %s to inspect members.", raw, key), nil
+	default:
+		return "", fmt.Errorf("unsupported module type: %s", typ)
+	}
 }
 
 // Do executes a raw Redis command.
