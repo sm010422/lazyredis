@@ -82,8 +82,12 @@ type msgOpDoneWithNext struct {
 	nextKey string
 }
 type msgConnected struct {
-	client *redisclient.Client
-	cfg    *config.Config
+	client   *redisclient.Client
+	cfg      *config.Config
+	interval time.Duration
+}
+type msgSettingsApplied struct {
+	interval time.Duration
 }
 
 // ---- App ----
@@ -96,12 +100,13 @@ type App struct {
 	height int
 
 	// navigation
-	tab         tabID
-	focus       focusArea
-	currentDB   int
-	connected   bool
-	dbSize      int64
-	typeCache   map[string]string // key -> type string
+	tab             tabID
+	focus           focusArea
+	currentDB       int
+	connected       bool
+	dbSize          int64
+	typeCache       map[string]string // key -> type string
+	refreshInterval time.Duration     // 0 = off
 
 	// panels
 	keys   KeysPanel
@@ -135,12 +140,16 @@ func (a *App) Init() tea.Cmd {
 	return tea.Batch(
 		a.loadKeys(),
 		a.loadServerInfo(),
-		tickCmd(),
+		a.tickCmd(),
 	)
 }
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(10*time.Second, func(t time.Time) tea.Msg { return msgRefreshTick(t) })
+func (a *App) tickCmd() tea.Cmd {
+	d := a.refreshInterval
+	if d <= 0 {
+		d = 10 * time.Second // fallback: keep dbSize fresh even when auto-refresh is off
+	}
+	return tea.Tick(d, func(t time.Time) tea.Msg { return msgRefreshTick(t) })
 }
 
 // ---- Update ----
@@ -155,7 +164,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case msgRefreshTick:
 		n, _ := a.redis.DBSize()
 		a.dbSize = n
-		return a, tickCmd()
+		if a.refreshInterval > 0 && a.connected {
+			return a, tea.Batch(a.tickCmd(), a.loadKeys())
+		}
+		return a, a.tickCmd()
 
 	case msgKeysLoaded:
 		if msg.err != nil {
@@ -163,6 +175,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.setStatus("Connection error: "+msg.err.Error(), true)
 		} else {
 			a.connected = true
+			if a.statusText == "Refreshing…" {
+				a.setStatus("", false)
+			}
 			prevSel := a.keys.Selected()
 			a.keys.SetKeys(msg.keys)
 			// restore cursor to previously selected key, or auto-select first
@@ -260,12 +275,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.dbSize = n
 		return a, a.selectKey(msg.nextKey)
 
+	case msgSettingsApplied:
+		a.refreshInterval = msg.interval
+		label := "off"
+		if msg.interval > 0 {
+			label = msg.interval.String()
+		}
+		a.setStatus("Auto-refresh: "+label, false)
+		return a, a.tickCmd()
+
 	case msgConnected:
 		a.redis.Close()
 		a.redis = msg.client
 		a.cfg = msg.cfg
 		a.currentDB = msg.cfg.DB
 		a.connected = true
+		a.refreshInterval = msg.interval
 		a.typeCache = make(map[string]string)
 		a.keys = newKeysPanel()
 		a.value.Reset()
@@ -274,7 +299,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tlsInfo = " (TLS)"
 		}
 		a.setStatus(fmt.Sprintf("Connected to %s db%d%s", msg.cfg.Addr(), msg.cfg.DB, tlsInfo), false)
-		return a, tea.Batch(a.loadKeys(), a.loadServerInfo())
+		return a, tea.Batch(a.loadKeys(), a.loadServerInfo(), a.tickCmd())
 
 	case typeCacheMsg:
 		for k, t := range msg {
@@ -566,11 +591,12 @@ func (a *App) openConnectModal() tea.Cmd {
 	a.modal = NewConnectModal(
 		a.cfg.Host, a.cfg.Port, a.cfg.Password, a.cfg.DB,
 		a.cfg.TLS, a.cfg.TLSSkipVerify,
+		refreshIntervalIdx(a.refreshInterval),
 		func(r ModalResult) tea.Cmd {
-			if !r.Confirmed || len(r.Values) < 6 {
+			if !r.Confirmed || len(r.Values) < 7 {
 				return nil
 			}
-			return a.reconnect(r.Values)
+			return a.applySettings(r.Values)
 		},
 	)
 	return textinput.Blink
@@ -708,7 +734,7 @@ func (a *App) loadServerInfo() tea.Cmd {
 	}
 }
 
-func (a *App) reconnect(vals []string) tea.Cmd {
+func (a *App) applySettings(vals []string) tea.Cmd {
 	return func() tea.Msg {
 		port, _ := strconv.Atoi(vals[1])
 		if port <= 0 {
@@ -718,6 +744,19 @@ func (a *App) reconnect(vals []string) tea.Cmd {
 		if db < 0 || db > 15 {
 			db = 0
 		}
+		interval := parseRefreshInterval(vals[6])
+
+		// If only the interval changed, skip reconnect.
+		sameConn := vals[0] == a.cfg.Host &&
+			port == a.cfg.Port &&
+			vals[2] == a.cfg.Password &&
+			db == a.cfg.DB &&
+			(vals[4] == "true") == a.cfg.TLS &&
+			(vals[5] == "true") == a.cfg.TLSSkipVerify
+		if sameConn {
+			return msgSettingsApplied{interval: interval}
+		}
+
 		newCfg := &config.Config{
 			Host:          vals[0],
 			Port:          port,
@@ -725,10 +764,9 @@ func (a *App) reconnect(vals []string) tea.Cmd {
 			DB:            db,
 			TLS:           vals[4] == "true",
 			TLSSkipVerify: vals[5] == "true",
-			// cert/key/ca remain CLI-only for now
-			TLSCert: a.cfg.TLSCert,
-			TLSKey:  a.cfg.TLSKey,
-			TLSCA:   a.cfg.TLSCA,
+			TLSCert:       a.cfg.TLSCert,
+			TLSKey:        a.cfg.TLSKey,
+			TLSCA:         a.cfg.TLSCA,
 		}
 		client, err := redisclient.New(newCfg)
 		if err != nil {
@@ -738,7 +776,41 @@ func (a *App) reconnect(vals []string) tea.Cmd {
 			client.Close()
 			return msgStatus{text: "Connection failed: " + err.Error(), isError: true}
 		}
-		return msgConnected{client: client, cfg: newCfg}
+		return msgConnected{client: client, cfg: newCfg, interval: interval}
+	}
+}
+
+func parseRefreshInterval(s string) time.Duration {
+	switch s {
+	case "1s":
+		return 1 * time.Second
+	case "2s":
+		return 2 * time.Second
+	case "5s":
+		return 5 * time.Second
+	case "10s":
+		return 10 * time.Second
+	case "30s":
+		return 30 * time.Second
+	default:
+		return 0
+	}
+}
+
+func refreshIntervalIdx(d time.Duration) int {
+	switch d {
+	case 1 * time.Second:
+		return 1
+	case 2 * time.Second:
+		return 2
+	case 5 * time.Second:
+		return 3
+	case 10 * time.Second:
+		return 4
+	case 30 * time.Second:
+		return 5
+	default:
+		return 0
 	}
 }
 

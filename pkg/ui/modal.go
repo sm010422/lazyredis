@@ -43,9 +43,12 @@ type Modal struct {
 	// for connect modal
 	tlsEnabled    bool
 	tlsSkipVerify bool
+	refreshIdx    int // index into refreshLabels
 
 	onDone func(ModalResult) tea.Cmd
 }
+
+var refreshLabels = []string{"off", "1s", "2s", "5s", "10s", "30s"}
 
 func newInput(placeholder string, limit int) textinput.Model {
 	ti := textinput.New()
@@ -127,7 +130,7 @@ func NewCommandModal(onDone func(ModalResult) tea.Cmd) *Modal {
 // NewConnectModal opens the connection-settings dialog pre-filled with the
 // current connection values.  focused cycles: host→port→pass→db→TLS→(skipVerify)→host.
 // ModalResult.Values: [host, port, password, db, tls "true"/"false", skipVerify "true"/"false"]
-func NewConnectModal(host string, port int, password string, db int, tlsOn, skipVerify bool, onDone func(ModalResult) tea.Cmd) *Modal {
+func NewConnectModal(host string, port int, password string, db int, tlsOn, skipVerify bool, refreshIdx int, onDone func(ModalResult) tea.Cmd) *Modal {
 	hostIn := newInput("hostname or IP", 256)
 	hostIn.SetValue(host)
 	hostIn.Focus()
@@ -142,6 +145,9 @@ func NewConnectModal(host string, port int, password string, db int, tlsOn, skip
 	dbIn := newInput("0–15", 2)
 	dbIn.SetValue(fmt.Sprintf("%d", db))
 
+	if refreshIdx < 0 || refreshIdx >= len(refreshLabels) {
+		refreshIdx = 0
+	}
 	return &Modal{
 		Kind:          modalConnect,
 		Title:         "Connect to Redis",
@@ -149,6 +155,7 @@ func NewConnectModal(host string, port int, password string, db int, tlsOn, skip
 		focused:       0,
 		tlsEnabled:    tlsOn,
 		tlsSkipVerify: skipVerify,
+		refreshIdx:    refreshIdx,
 		onDone:        onDone,
 	}
 }
@@ -233,12 +240,10 @@ func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 
 	case modalConnect:
 		// focused 0-3 = text inputs (host/port/pass/db)
-		// focused 4   = TLS toggle
-		// focused 5   = Skip Verify toggle (only when tlsEnabled)
-		totalFocusable := 5
-		if m.tlsEnabled {
-			totalFocusable = 6
-		}
+		// focused 4   = TLS toggle       (space)
+		// focused 5   = Skip Verify      (space, only when tlsEnabled)
+		// focused 6   = Refresh interval (←/→ or space)
+		// Tab cycles 0→1→2→3→4→(5 if tls)→6→0
 		switch msg.String() {
 		case "esc":
 			return nil, m.onDone(ModalResult{Confirmed: false})
@@ -246,24 +251,43 @@ func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 			if m.focused < 4 {
 				m.inputs[m.focused].Blur()
 			}
-			m.focused = (m.focused + 1) % totalFocusable
+			next := (m.focused + 1) % 7
+			if next == 5 && !m.tlsEnabled {
+				next = 6 // skip Skip Verify when TLS is off
+			}
+			m.focused = next
 			if m.focused < 4 {
 				m.inputs[m.focused].Focus()
 				return m, textinput.Blink
 			}
 			return m, nil
 		case " ":
-			if m.focused == 4 {
+			switch m.focused {
+			case 4:
 				m.tlsEnabled = !m.tlsEnabled
 				if !m.tlsEnabled {
 					m.tlsSkipVerify = false
 				}
-			} else if m.focused == 5 && m.tlsEnabled {
-				m.tlsSkipVerify = !m.tlsSkipVerify
-			} else if m.focused < 4 {
+			case 5:
+				if m.tlsEnabled {
+					m.tlsSkipVerify = !m.tlsSkipVerify
+				}
+			case 6:
+				m.refreshIdx = (m.refreshIdx + 1) % len(refreshLabels)
+			default:
 				var cmd tea.Cmd
 				m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
 				return m, cmd
+			}
+			return m, nil
+		case "left":
+			if m.focused == 6 && m.refreshIdx > 0 {
+				m.refreshIdx--
+			}
+			return m, nil
+		case "right":
+			if m.focused == 6 && m.refreshIdx < len(refreshLabels)-1 {
+				m.refreshIdx++
 			}
 			return m, nil
 		case "enter":
@@ -274,6 +298,7 @@ func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 				m.inputs[3].Value(),
 				fmt.Sprintf("%v", m.tlsEnabled),
 				fmt.Sprintf("%v", m.tlsSkipVerify),
+				refreshLabels[m.refreshIdx], // e.g. "off", "2s", "5s"
 			}
 			return nil, m.onDone(ModalResult{Confirmed: true, Values: vals})
 		default:
@@ -369,15 +394,27 @@ func (m *Modal) View(width int) string {
 			lines = append(lines, skipLabel+"   "+skipBadge)
 		}
 
+		// Refresh interval
+		refreshLabel := styleInfo.Render("Auto-refresh")
+		if m.focused == 6 {
+			refreshLabel = styleSelected.Render(" Auto-refresh ")
+		}
+		refreshBadge := styleMuted.Render(" off ")
+		if m.refreshIdx > 0 {
+			refreshBadge = styleWarning.Render(" " + refreshLabels[m.refreshIdx] + " ")
+		}
+		lines = append(lines, refreshLabel+"   "+refreshBadge+"  "+styleMuted.Render("(←/→ or space)"))
+
 		lines = append(lines, "")
 		w = width * 60 / 100
 		if w < 55 {
 			w = 55
 		}
 		lines = append(lines,
-			styleHintKey.Render("tab")+" "+styleHintDesc.Render("next field")+"  "+
+			styleHintKey.Render("tab")+" "+styleHintDesc.Render("next")+"  "+
 				styleHintKey.Render("space")+" "+styleHintDesc.Render("toggle")+"  "+
-				styleHintKey.Render("enter")+" "+styleHintDesc.Render("connect")+"  "+
+				styleHintKey.Render("←/→")+" "+styleHintDesc.Render("interval")+"  "+
+				styleHintKey.Render("enter")+" "+styleHintDesc.Render("apply")+"  "+
 				styleHintKey.Render("esc")+" "+styleHintDesc.Render("cancel"))
 
 	case modalConfirm:
