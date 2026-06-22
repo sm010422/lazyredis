@@ -81,6 +81,10 @@ type msgOpDoneWithNext struct {
 	msgOpDone
 	nextKey string
 }
+type msgConnected struct {
+	client *redisclient.Client
+	cfg    *config.Config
+}
 
 // ---- App ----
 
@@ -255,6 +259,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n, _ := a.redis.DBSize()
 		a.dbSize = n
 		return a, a.selectKey(msg.nextKey)
+
+	case msgConnected:
+		a.redis.Close()
+		a.redis = msg.client
+		a.cfg = msg.cfg
+		a.currentDB = msg.cfg.DB
+		a.connected = true
+		a.typeCache = make(map[string]string)
+		a.keys = newKeysPanel()
+		a.value.Reset()
+		tlsInfo := ""
+		if msg.cfg.TLS {
+			tlsInfo = " (TLS)"
+		}
+		a.setStatus(fmt.Sprintf("Connected to %s db%d%s", msg.cfg.Addr(), msg.cfg.DB, tlsInfo), false)
+		return a, tea.Batch(a.loadKeys(), a.loadServerInfo())
 
 	case typeCacheMsg:
 		for k, t := range msg {
@@ -522,6 +542,9 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 	case "?":
 		a.tab = tabHelp
 		return a, nil
+
+	case "S":
+		return a, a.openConnectModal()
 	}
 
 	return a, nil
@@ -533,8 +556,24 @@ func (a *App) handleServerTab(key string) (tea.Model, tea.Cmd) {
 		a.server.ToggleRaw()
 	case "R":
 		return a, a.loadServerInfo()
+	case "S":
+		return a, a.openConnectModal()
 	}
 	return a, nil
+}
+
+func (a *App) openConnectModal() tea.Cmd {
+	a.modal = NewConnectModal(
+		a.cfg.Host, a.cfg.Port, a.cfg.Password, a.cfg.DB,
+		a.cfg.TLS, a.cfg.TLSSkipVerify,
+		func(r ModalResult) tea.Cmd {
+			if !r.Confirmed || len(r.Values) < 6 {
+				return nil
+			}
+			return a.reconnect(r.Values)
+		},
+	)
+	return textinput.Blink
 }
 
 // ---- Redis commands ----
@@ -666,6 +705,40 @@ func (a *App) loadServerInfo() tea.Cmd {
 		}
 		raw, _ := a.redis.GetRawInfo("")
 		return msgServerInfo{info: info, rawInfo: raw}
+	}
+}
+
+func (a *App) reconnect(vals []string) tea.Cmd {
+	return func() tea.Msg {
+		port, _ := strconv.Atoi(vals[1])
+		if port <= 0 {
+			port = 6379
+		}
+		db, _ := strconv.Atoi(vals[3])
+		if db < 0 || db > 15 {
+			db = 0
+		}
+		newCfg := &config.Config{
+			Host:          vals[0],
+			Port:          port,
+			Password:      vals[2],
+			DB:            db,
+			TLS:           vals[4] == "true",
+			TLSSkipVerify: vals[5] == "true",
+			// cert/key/ca remain CLI-only for now
+			TLSCert: a.cfg.TLSCert,
+			TLSKey:  a.cfg.TLSKey,
+			TLSCA:   a.cfg.TLSCA,
+		}
+		client, err := redisclient.New(newCfg)
+		if err != nil {
+			return msgStatus{text: "Connection error: " + err.Error(), isError: true}
+		}
+		if err := client.Ping(); err != nil {
+			client.Close()
+			return msgStatus{text: "Connection failed: " + err.Error(), isError: true}
+		}
+		return msgConnected{client: client, cfg: newCfg}
 	}
 }
 
@@ -1143,7 +1216,11 @@ func (a *App) renderHeader() string {
 
 	dbStr := styleWarning.Render(fmt.Sprintf("db%d", a.currentDB))
 	keysStr := styleMuted.Render(fmt.Sprintf("%d keys", a.dbSize))
-	addrStr := styleInfo.Render("redis://" + a.cfg.Addr())
+	scheme := "redis://"
+	if a.cfg.TLS {
+		scheme = "rediss://"
+	}
+	addrStr := styleInfo.Render(scheme + a.cfg.Addr())
 
 	left := styleTitle.Render("LazyRedis") + "  " + connStr + "  " + dbStr + "  " + keysStr
 	right := addrStr
@@ -1203,7 +1280,7 @@ func (a *App) renderStatusBar() string {
 			{"d", "delete"}, {"e", "edit"}, {"a", "add item"},
 			{"D", "del item"}, {"R", "rename"}, {"t", "TTL"},
 			{"c", "copy"}, {":", "command"}, {"[/]", "switch DB"},
-			{"?", "help"}, {"q", "quit"},
+			{"S", "connect"}, {"?", "help"}, {"q", "quit"},
 		}
 		var parts []string
 		for _, h := range hints {
@@ -1248,6 +1325,7 @@ func (a *App) renderHelp(height int) string {
 		}},
 		{"Global", [][]string{
 			{":", "run raw Redis command"},
+			{"S", "open connection settings (host / port / pass / db / TLS)"},
 			{"[  ]", "switch database (db0-db15)"},
 			{"r", "refresh keys + server info"},
 			{"1 / 2 / 3", "tab: Keys / Server / Help"},

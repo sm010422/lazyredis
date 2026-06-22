@@ -2,8 +2,11 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,14 +66,41 @@ type Client struct {
 	ctx context.Context
 }
 
-func New(cfg *config.Config) *Client {
-	rdb := goredis.NewClient(&goredis.Options{
+func New(cfg *config.Config) (*Client, error) {
+	opts := &goredis.Options{
 		Addr:        cfg.Addr(),
 		Password:    cfg.Password,
 		DB:          cfg.DB,
 		DialTimeout: 3 * time.Second,
-	})
-	return &Client{rdb: rdb, ctx: context.Background()}
+	}
+
+	if cfg.TLS {
+		tlsCfg := &tls.Config{
+			InsecureSkipVerify: cfg.TLSSkipVerify,
+			ServerName:         cfg.Host,
+		}
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			cert, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
+			if err != nil {
+				return nil, fmt.Errorf("load TLS cert/key: %w", err)
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
+		if cfg.TLSCA != "" {
+			pem, err := os.ReadFile(cfg.TLSCA)
+			if err != nil {
+				return nil, fmt.Errorf("read TLS CA: %w", err)
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("failed to parse CA certificate")
+			}
+			tlsCfg.RootCAs = pool
+		}
+		opts.TLSConfig = tlsCfg
+	}
+
+	return &Client{rdb: goredis.NewClient(opts), ctx: context.Background()}, nil
 }
 
 func (c *Client) Ping() error {

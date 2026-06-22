@@ -19,6 +19,7 @@ const (
 	modalRename
 	modalTTL
 	modalCommand // raw command
+	modalConnect // connection settings
 )
 
 type ModalResult struct {
@@ -38,6 +39,10 @@ type Modal struct {
 	// for type picker (new key)
 	typeOptions []string
 	typeIdx     int
+
+	// for connect modal
+	tlsEnabled    bool
+	tlsSkipVerify bool
 
 	onDone func(ModalResult) tea.Cmd
 }
@@ -119,6 +124,35 @@ func NewCommandModal(onDone func(ModalResult) tea.Cmd) *Modal {
 	}
 }
 
+// NewConnectModal opens the connection-settings dialog pre-filled with the
+// current connection values.  focused cycles: host→port→pass→db→TLS→(skipVerify)→host.
+// ModalResult.Values: [host, port, password, db, tls "true"/"false", skipVerify "true"/"false"]
+func NewConnectModal(host string, port int, password string, db int, tlsOn, skipVerify bool, onDone func(ModalResult) tea.Cmd) *Modal {
+	hostIn := newInput("hostname or IP", 256)
+	hostIn.SetValue(host)
+	hostIn.Focus()
+
+	portIn := newInput("6379", 6)
+	portIn.SetValue(fmt.Sprintf("%d", port))
+
+	passIn := newInput("(blank = no auth)", 256)
+	passIn.SetValue(password)
+	passIn.EchoMode = textinput.EchoPassword
+
+	dbIn := newInput("0–15", 2)
+	dbIn.SetValue(fmt.Sprintf("%d", db))
+
+	return &Modal{
+		Kind:          modalConnect,
+		Title:         "Connect to Redis",
+		inputs:        []textinput.Model{hostIn, portIn, passIn, dbIn},
+		focused:       0,
+		tlsEnabled:    tlsOn,
+		tlsSkipVerify: skipVerify,
+		onDone:        onDone,
+	}
+}
+
 var keyTypeChoices = []string{"string", "list", "hash", "set", "zset"}
 
 func NewNewKeyModal(onDone func(ModalResult) tea.Cmd) *Modal {
@@ -197,6 +231,60 @@ func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 		}
 		return m, nil
 
+	case modalConnect:
+		// focused 0-3 = text inputs (host/port/pass/db)
+		// focused 4   = TLS toggle
+		// focused 5   = Skip Verify toggle (only when tlsEnabled)
+		totalFocusable := 5
+		if m.tlsEnabled {
+			totalFocusable = 6
+		}
+		switch msg.String() {
+		case "esc":
+			return nil, m.onDone(ModalResult{Confirmed: false})
+		case "tab":
+			if m.focused < 4 {
+				m.inputs[m.focused].Blur()
+			}
+			m.focused = (m.focused + 1) % totalFocusable
+			if m.focused < 4 {
+				m.inputs[m.focused].Focus()
+				return m, textinput.Blink
+			}
+			return m, nil
+		case " ":
+			if m.focused == 4 {
+				m.tlsEnabled = !m.tlsEnabled
+				if !m.tlsEnabled {
+					m.tlsSkipVerify = false
+				}
+			} else if m.focused == 5 && m.tlsEnabled {
+				m.tlsSkipVerify = !m.tlsSkipVerify
+			} else if m.focused < 4 {
+				var cmd tea.Cmd
+				m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
+				return m, cmd
+			}
+			return m, nil
+		case "enter":
+			vals := []string{
+				m.inputs[0].Value(),
+				m.inputs[1].Value(),
+				m.inputs[2].Value(),
+				m.inputs[3].Value(),
+				fmt.Sprintf("%v", m.tlsEnabled),
+				fmt.Sprintf("%v", m.tlsSkipVerify),
+			}
+			return nil, m.onDone(ModalResult{Confirmed: true, Values: vals})
+		default:
+			if m.focused < 4 {
+				var cmd tea.Cmd
+				m.inputs[m.focused], cmd = m.inputs[m.focused].Update(msg)
+				return m, cmd
+			}
+		}
+		return m, nil
+
 	default: // input-based modals
 		switch msg.String() {
 		case "esc":
@@ -245,6 +333,53 @@ func (m *Modal) View(width int) string {
 	}
 
 	switch m.Kind {
+	case modalConnect:
+		inputLabels := []string{"Host:", "Port:", "Password:", "DB:"}
+		for i, label := range inputLabels {
+			if m.focused == i {
+				lines = append(lines, stylePanelTitle.Render(label))
+			} else {
+				lines = append(lines, styleInfo.Render(label))
+			}
+			lines = append(lines, m.inputs[i].View())
+			lines = append(lines, "")
+		}
+
+		// TLS toggle
+		tlsBadge := styleMuted.Render(" off ")
+		if m.tlsEnabled {
+			tlsBadge = styleSuccess.Render(" on ")
+		}
+		tlsLabel := styleInfo.Render("TLS")
+		if m.focused == 4 {
+			tlsLabel = styleSelected.Render(" TLS ")
+		}
+		lines = append(lines, tlsLabel+"   "+tlsBadge+"  "+styleMuted.Render("(space to toggle)"))
+
+		// Skip Verify — only visible when TLS is on
+		if m.tlsEnabled {
+			skipBadge := styleSuccess.Render(" no ")
+			if m.tlsSkipVerify {
+				skipBadge = styleWarning.Render(" yes (insecure) ")
+			}
+			skipLabel := styleInfo.Render("Skip Verify")
+			if m.focused == 5 {
+				skipLabel = styleSelected.Render(" Skip Verify ")
+			}
+			lines = append(lines, skipLabel+"   "+skipBadge)
+		}
+
+		lines = append(lines, "")
+		w = width * 60 / 100
+		if w < 55 {
+			w = 55
+		}
+		lines = append(lines,
+			styleHintKey.Render("tab")+" "+styleHintDesc.Render("next field")+"  "+
+				styleHintKey.Render("space")+" "+styleHintDesc.Render("toggle")+"  "+
+				styleHintKey.Render("enter")+" "+styleHintDesc.Render("connect")+"  "+
+				styleHintKey.Render("esc")+" "+styleHintDesc.Render("cancel"))
+
 	case modalConfirm:
 		lines = append(lines, styleInfo.Render(m.Prompt))
 		lines = append(lines, "")

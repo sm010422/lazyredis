@@ -15,7 +15,11 @@ var version = "0.2.0"
 func main() {
 	cfg := config.Parse()
 
-	r := redisclient.New(cfg)
+	r, err := redisclient.New(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	defer r.Close()
 
 	app := ui.New(cfg, r)
