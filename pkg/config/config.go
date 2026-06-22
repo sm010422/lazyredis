@@ -1,0 +1,27 @@
+package config
+
+import (
+	"flag"
+	"fmt"
+)
+
+type Config struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
+}
+
+func (c *Config) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+func Parse() *Config {
+	cfg := &Config{}
+	flag.StringVar(&cfg.Host, "host", "127.0.0.1", "Redis host")
+	flag.IntVar(&cfg.Port, "port", 6379, "Redis port")
+	flag.StringVar(&cfg.Password, "pass", "", "Redis password")
+	flag.IntVar(&cfg.DB, "db", 0, "Redis database number")
+	flag.Parse()
+	return cfg
+}
