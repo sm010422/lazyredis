@@ -16,6 +16,16 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// noopLogger silences go-redis internal connection pool error logs so they
+// don't flood the terminal when Redis is unreachable.
+type noopLogger struct{}
+
+func (noopLogger) Printf(_ context.Context, _ string, _ ...interface{}) {}
+
+func init() {
+	goredis.SetLogger(noopLogger{})
+}
+
 type KeyType string
 
 const (

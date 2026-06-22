@@ -1553,7 +1553,44 @@ func (a *App) renderKeysLayout(bodyH int) string {
 	infoPanel := a.info.Render(rightW, botH, a.value.Info, a.cmdLog)
 
 	right := lipgloss.JoinVertical(lipgloss.Left, valuePanel, infoPanel)
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, right)
+	layout := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, right)
+
+	if !a.connected {
+		layout = overlayCenter(layout, a.renderDisconnectedBox())
+	}
+	return layout
+}
+
+func (a *App) renderDisconnectedBox() string {
+	scheme := "redis://"
+	if a.cfg.TLS {
+		scheme = "rediss://"
+	}
+	addr := scheme + a.cfg.Addr()
+
+	lines := []string{
+		styleError.Render("  ✗  Cannot connect to Redis  "),
+		"",
+		styleInfo.Render("  Host:  ") + styleWarning.Render(addr),
+		"",
+		styleMuted.Render("  Retrying automatically every tick…"),
+		"",
+		styleHintKey.Render("S") + "  " + styleHintDesc.Render("change connection settings"),
+		styleHintKey.Render("p") + "  " + styleHintDesc.Render("switch profile"),
+		styleHintKey.Render("q") + "  " + styleHintDesc.Render("quit"),
+	}
+
+	content := strings.Join(lines, "\n")
+	w := a.width * 50 / 100
+	if w < 52 {
+		w = 52
+	}
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorRed).
+		Padding(1, 2).
+		Width(w).
+		Render(content)
 }
 
 func (a *App) renderStatusBar() string {
