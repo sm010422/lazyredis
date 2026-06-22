@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type modalKind int
@@ -289,8 +288,7 @@ func (m *Modal) View(width int) string {
 	}
 
 	content := strings.Join(lines, "\n")
-	box := styleModalBorder.Width(w).Render(content)
-	return lipgloss.Place(width, lipgloss.Height(box)+4, lipgloss.Center, lipgloss.Center, box)
+	return styleModalBorder.Width(w).Render(content)
 }
 
 func min(a, b int) int {

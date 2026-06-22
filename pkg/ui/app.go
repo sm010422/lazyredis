@@ -1127,29 +1127,9 @@ func (a *App) View() string {
 
 	view := lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, statusBar)
 
-	// Modal overlay
+	// Modal overlay — render fg on top of background, preserving panel borders.
 	if a.modal != nil {
-		overlay := a.modal.View(a.width)
-		modalH := lipgloss.Height(overlay)
-		// Place overlay in lower half
-		padTop := a.height/2 - modalH/2
-		if padTop < 0 {
-			padTop = 0
-		}
-		lines := strings.Split(view, "\n")
-		overlayLines := strings.Split(overlay, "\n")
-		for i, ol := range overlayLines {
-			li := padTop + i
-			if li < len(lines) {
-				// center horizontally
-				padL := (a.width - lipgloss.Width(ol)) / 2
-				if padL < 0 {
-					padL = 0
-				}
-				lines[li] = strings.Repeat(" ", padL) + ol
-			}
-		}
-		return strings.Join(lines, "\n")
+		return overlayCenter(view, a.modal.View(a.width))
 	}
 
 	return view
