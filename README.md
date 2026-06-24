@@ -1,36 +1,32 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/parksangmin/lazyredis/main/assets/logo.png" width="120" alt="LazyRedis logo">
-
 # LazyRedis
 
-**A blazing fast terminal UI for Redis**
+**A lazygit-inspired terminal UI for Redis**
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/parksangmin/lazyredis)](https://goreportcard.com/report/github.com/parksangmin/lazyredis)
-[![GitHub release](https://img.shields.io/github/v/release/parksangmin/lazyredis?color=blue)](https://github.com/parksangmin/lazyredis/releases/latest)
+[![GitHub release](https://img.shields.io/github/v/release/sm010422/lazyredis?color=blue)](https://github.com/sm010422/lazyredis/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.21-blue)](https://golang.org/)
 
 ```
-LazyRedis  ● CONNECTED  db0  9 keys                        redis://127.0.0.1:6379
-    Keys           Server           Help
-╭─────────────────╮╭──────────────────────────────────────────────────────────────╮
-│ Keys  9         ││ leaderboard  ZST                                              │
-│ ZST leaderboard ││ RANK  SCORE        MEMBER                                    │
-│ HSH profile:alice││    1  72           dave                                      │
-│ STR session:abc ││    2  87           charlie                                   │
-│ SET tags:go     ││    3  95           bob                                       │
-│ LST tasks:queue ││    4  100          alice                                     │
-│ STR user:1      ││                                                              │
-│ STR user:2      │╰──────────────────────────────────────────────────────────────╯
-│                 │╭──────────────────────────────────────────────────────────────╮
-│                 ││ Info                                                          │
-│                 ││ Key:    leaderboard                                           │
-│                 ││ Type:   ZST                                                  │
-│                 ││ TTL:    persistent                                            │
-│                 ││ Size:   4 elements  Memory: 74 B                             │
-╰─────────────────╯╰──────────────────────────────────────────────────────────────╯
- j/k navigate  / filter  n new key  d delete  e edit  a add  R rename  t TTL  q quit
+LazyRedis  ● CONNECTED  db0  63 keys                   redis://127.0.0.1:6379
+    Keys        Server        Help
+╭────────────────────╮╭────────────────────────────────────────────────────────╮
+│Keys  63  /user/    ││user:1:profile  HSH                                     │
+│← backspace  esc    ││FIELD                   VALUE                           │
+│root                ││age                     28                              │
+│  ▶ 1/  (3)         ││city                    Seoul                           │
+│  ▶ 2/  (3)         ││name                    Alice Kim                       │
+│  ▶ 3/  (2)         ││                                                        │
+│                    │╰────────────────────────────────────────────────────────╯
+│                    │╭────────────────────────────────────────────────────────╮
+│                    ││Info                                                    │
+│                    ││Key:     user:1:profile                                 │
+│                    ││Type:     HSH                                           │
+│                    ││TTL:     persistent                                     │
+╰────────────────────╯│Size:    3 elements  Memory: 96 B                      │
+                      ╰────────────────────────────────────────────────────────╯
+ j/k navigate  /search  n new  d delete  enter enter dir  ← up  p profile  q quit
 ```
 
 </div>
@@ -39,212 +35,145 @@ LazyRedis  ● CONNECTED  db0  9 keys                        redis://127.0.0.1:6
 
 ## Elevator Pitch
 
-Let me rant for a second. You're debugging a production issue at 2am. You fire up `redis-cli` and type `KEYS *`. 50,000 keys flood your terminal. Great. Now you need to inspect one of them — so you squint at the wall of text, copy a key name, type `TYPE user:session:a1b2c3d4`, then `TTL user:session:a1b2c3d4`, then `HGETALL user:session:a1b2c3d4`, and you're still not sure if that's the right key. Meanwhile you've typed the same key name five times and made a typo twice. *Are you kidding me?*
+You're debugging a production issue at 2am. You fire up `redis-cli` and type `KEYS *`. 50,000 keys flood your terminal. Now you need to inspect one — so you copy a key name, type `TYPE user:session:a1b2c3d4`, then `TTL user:session:a1b2c3d4`, then `HGETALL user:session:a1b2c3d4`. You've typed the same key name five times and made a typo twice.
 
-Want to delete a bunch of keys? Better write a one-liner with `redis-cli KEYS "pattern:*" | xargs redis-cli DEL` and pray it doesn't nuke something you need. Want to see your server stats? `INFO` dumps 100 lines into your terminal. Want to edit a hash field? That's `HSET key field value`, but first you need to remember the exact field name from the `HGETALL` output you just scrolled past.
-
-**If you're tired of juggling `redis-cli` commands and squinting at walls of text, LazyRedis is for you.**
+**LazyRedis gives you a lazygit-style TUI that shows everything at once — no commands to remember, no copy-pasting key names.**
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
-  - [Browse and inspect keys](#browse-and-inspect-keys)
-  - [Full CRUD for all Redis types](#full-crud-for-all-redis-types)
-  - [JSON auto-detection](#json-auto-detection)
-  - [Live filter](#live-filter)
-  - [Server info dashboard](#server-info-dashboard)
-  - [Multi-database switching](#multi-database-switching)
-  - [Raw command mode](#raw-command-mode)
 - [Installation](#installation)
-  - [Go](#go)
-  - [Homebrew](#homebrew)
-  - [Binary releases](#binary-releases)
-  - [Build from source](#build-from-source)
 - [Usage](#usage)
 - [Keybindings](#keybindings)
-- [Configuration](#configuration)
-- [Supported Redis types](#supported-redis-types)
+- [Multi-Profile Config](#multi-profile-config)
+- [Supported Redis Types](#supported-redis-types)
+- [Project Structure](#project-structure)
 - [Contributing](#contributing)
-- [Alternatives](#alternatives)
 
 ---
 
 ## Features
 
-### Browse and inspect keys
+### Hierarchical Key Tree
 
-Navigate keys with `j`/`k` (or arrow keys). The value panel updates instantly as you move — no commands to type, no copy-pasting key names. The info panel shows type, TTL, element count, and memory usage for the selected key.
-
-```
-╭──────────────────╮╭───────────────────────────────────────────────────────────╮
-│ Keys  9          ││ profile:alice  HSH                                         │
-│ STR  config:debug││ FIELD                  VALUE                              │
-│ ZST  leaderboard ││ age                    28                                 │
-│ HSH  profile:alice││ city                   Seoul                              │
-│ STR  session:abc ││ name                   Alice Kim                          │
-│ SET  tags:go     │╰───────────────────────────────────────────────────────────╯
-│ LST  tasks:queue │╭───────────────────────────────────────────────────────────╮
-│ STR  user:1      ││ Info                                                       │
-│ STR  user:2      ││ Key:    profile:alice                                      │
-│                  ││ Type:   HSH   TTL: persistent   Size: 3 elements           │
-╰──────────────────╯╰───────────────────────────────────────────────────────────╯
-```
-
-Every key type gets a colour-coded badge:
-
-| Badge | Type | Colour |
-|-------|------|--------|
-| `STR` | String | 🟢 Green |
-| `LST` | List | 🔵 Blue |
-| `HSH` | Hash | 🟠 Orange |
-| `SET` | Set | 🟡 Yellow |
-| `ZST` | Sorted Set | 🟣 Purple |
-| `STM` | Stream | 🩵 Teal |
-
----
-
-### Full CRUD for all Redis types
-
-LazyRedis isn't just a viewer. Every operation you'd normally type as a command is available through modal dialogs:
-
-**Key operations** — `n` new key (with type picker), `d` delete with confirmation, `R` rename, `t` set/remove TTL, `c` copy value to clipboard.
-
-**Sub-item editing** — `tab` to focus the value panel, `J`/`K` to select a row, then:
-- `e` — edit the selected item (hash field value, list element, zset score/member)
-- `a` — add a new item to a list/hash/set/zset
-- `D` — delete the selected sub-item
-
-After every mutation the value panel refreshes instantly — no manual `r` needed.
+Keys are grouped by the `:` delimiter into a navigable folder structure. `user:1:name`, `user:1:email`, `user:2:name` becomes:
 
 ```
-                        ╭────────────────────────────────────╮
-                        │ Edit Hash Field: city               │
-                        │                                     │
-                        │ field name (tab to switch)          │
-                        │ > city                              │
-                        │                                     │
-                        │ value                               │
-                        │ > Busan                             │
-                        │                                     │
-                        │  enter  confirm    esc  cancel      │
-                        ╰────────────────────────────────────╯
+▶ user/  (3)
+  └─ ▶ 1/  (2)
+       ├─ STR  name
+       └─ STR  email
+  └─ ▶ 2/  (1)
+       └─ STR  name
 ```
 
----
+- `enter` — enter a folder
+- `backspace` — go up one level
+- `esc` — jump to root
+- `d` on a folder — delete all keys under that prefix (with count + confirm)
 
-### JSON auto-detection
+### Multi-Select & Batch Delete
 
-String values that contain valid JSON are automatically pretty-printed with syntax highlighting. No plugin needed.
-
-```
-╭──────────────────────────────────────────────╮
-│ api:response  STR                            │
-│ {                                            │
-│   "status": "ok",                            │
-│   "user": {                                  │
-│     "id": 42,                                │
-│     "name": "Alice"                          │
-│   },                                         │
-│   "tokens": ["read", "write"]                │
-│ }                                            │
-╰──────────────────────────────────────────────╯
-```
-
----
-
-### Live filter
-
-Press `/` to open the filter bar. As you type, the key list narrows in real time using fuzzy substring matching. Patterns containing `*`, `?`, or `[` are sent to Redis as a `SCAN` glob pattern for server-side filtering — useful when you have millions of keys.
+- `ctrl+space` — toggle selection on any item (leaf or folder)
+- `J` / `K` — extend range selection down / up
+- `d` with items selected — batch delete everything selected at once
 
 ```
-╭──────────────────╮
-│ Keys  3/42       │
-│ /user            │
-│ STR  user:1      │
-│ STR  user:2      │
-│ STR  user:3      │
-╰──────────────────╯
+│● 3 selected  (d=delete  ctrl+space=toggle)  │
+│● ▶ cache/  (12)                             │
+│● STR  config:debug                          │
+│   STR  session:abc                          │
 ```
 
-Press `enter` to lock the filter, `esc` to clear it.
+### Multi-Profile Support
 
----
+Store multiple Redis connections in `~/.config/lazyredis/config.json`. Press `p` to switch profiles without restarting.
 
-### Server info dashboard
-
-Press `2` to switch to the Server tab. See your Redis instance at a glance — version, mode, role, uptime, memory, connected clients, and cache hit ratio. Press `r` to toggle raw `INFO` output.
-
-```
-╭────────────────────────────────────────────────╮
-│ Server Info  [r] raw                           │
-│                                                │
-│ ── Server ──                                   │
-│   Version:           8.0.1                     │
-│   Mode:              standalone                │
-│   Role:              master                    │
-│   OS:                Darwin 24.0.0 arm64       │
-│   Uptime:            2d 4h 12m                 │
-│                                                │
-│ ── Clients & Memory ──                         │
-│   Connected:         3 clients                 │
-│   Used Memory:       2.31M                     │
-│                                                │
-│ ── Stats ──                                    │
-│   Total Commands:    18,432                    │
-│   Cache Hits:        17,980                    │
-│   Hit Ratio:         97.5%                     │
-╰────────────────────────────────────────────────╯
+```json
+{
+  "profiles": [
+    { "name": "local",      "host": "127.0.0.1", "port": 6379, "color": "green" },
+    { "name": "staging",    "host": "staging.internal", "port": 6379, "color": "yellow" },
+    { "name": "production", "host": "prod.internal",    "port": 6379, "color": "red", "tls": true }
+  ]
+}
 ```
 
----
+Each profile gets a colour that's reflected in the active panel border.
 
-### Multi-database switching
+### Full CRUD for All Redis Types
 
-Press `[` and `]` to cycle through Redis databases 0–15. The key list, type cache, and value panel all reset instantly on switch.
+Every mutation is available through modal dialogs — no commands to type:
 
----
+- `n` — create a new key (type picker: string / list / hash / set / zset)
+- `d` — delete key (or folder, or batch selection) with confirmation
+- `R` — rename key
+- `t` — set / remove TTL
+- `e` — edit selected item (hash field, list element, zset score/member)
+- `a` — add item to list / hash / set / zset
+- `D` — delete selected sub-item
 
-### Raw command mode
+### JSON Auto-Detection & Hex Display
 
-Press `:` to open a command prompt and run any Redis command. Results appear in the command log in the info panel.
+String values are rendered contextually:
 
+- **Valid JSON** → pretty-printed with syntax highlighting
+- **Binary / non-printable bytes** → hex dump with offset + ASCII sidebar
+- **Plain text** → shown as-is, paginated
+
+### Copy Without Typing
+
+- `y` — copy the current **key name** to clipboard
+- `Y` / `c` — copy the current **value** (or selected sub-item) to clipboard
+
+### TLS Support
+
+```sh
+lazyredis --tls --tls-skip-verify
+lazyredis --tls --tls-cert ./client.crt --tls-key ./client.key --tls-ca ./ca.crt
 ```
-╭──────────────────────────────────────────────╮
-│ Run Command                                   │
-│                                               │
-│ Redis command:                                │
-│ > DEBUG SLEEP 0                               │
-│                                               │
-│  enter  confirm    esc  cancel                │
-╰──────────────────────────────────────────────╯
-```
+
+TLS can also be toggled in the in-TUI connection settings modal (`S` key).
+
+### Auto-Refresh
+
+Configurable auto-refresh (off / 1s / 2s / 5s / 10s / 30s). Default is **2 seconds**. Set it in the connection modal (`S` → Tab to Auto-refresh).
+
+### Server Info Dashboard
+
+Press `2` for the Server tab — version, mode, role, uptime, memory, clients, cache hit ratio. Press `r` to toggle raw `INFO` output.
+
+### Disconnection Recovery
+
+When Redis is unreachable, a clear warning overlay appears with the failed address and instructions. LazyRedis keeps retrying in the background — no restart needed when Redis comes back up.
 
 ---
 
 ## Installation
 
-### Go
+### Homebrew (recommended)
 
 ```sh
-go install github.com/parksangmin/lazyredis@latest
+brew tap sm010422/lazyredis
+brew install lazyredis
 ```
 
-### Homebrew
+### Go install
 
 ```sh
-brew install parksangmin/tap/lazyredis
+go install github.com/sm010422/lazyredis@latest
 ```
 
 ### Binary releases
 
-Pre-built binaries for macOS (arm64, amd64), Linux (amd64, arm64), and Windows are available on the [releases page](https://github.com/parksangmin/lazyredis/releases).
+Pre-built binaries for macOS (arm64 / amd64) and Linux (arm64 / amd64) are available on the [releases page](https://github.com/sm010422/lazyredis/releases).
 
 ```sh
-# macOS arm64 example
+# macOS Apple Silicon example
 curl -Lo lazyredis.tar.gz \
-  "https://github.com/parksangmin/lazyredis/releases/latest/download/lazyredis_Darwin_arm64.tar.gz"
+  "https://github.com/sm010422/lazyredis/releases/latest/download/lazyredis_darwin_arm64.tar.gz"
 tar xf lazyredis.tar.gz
 sudo mv lazyredis /usr/local/bin/
 ```
@@ -252,7 +181,7 @@ sudo mv lazyredis /usr/local/bin/
 ### Build from source
 
 ```sh
-git clone https://github.com/parksangmin/lazyredis.git
+git clone https://github.com/sm010422/lazyredis.git
 cd lazyredis
 go build -o lazyredis .
 sudo mv lazyredis /usr/local/bin/
@@ -265,174 +194,193 @@ Requires **Go 1.21+**.
 ## Usage
 
 ```sh
-lazyredis
-```
-
-Connect to a specific host, port, password, or database:
-
-```sh
-lazyredis --host 192.168.1.10 --port 6380 --pass mysecret --db 3
+lazyredis                                        # localhost:6379
+lazyredis --host 192.168.1.10 --port 6380
+lazyredis --pass mysecret --db 3
+lazyredis --tls
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--host` | `127.0.0.1` | Redis host |
 | `--port` | `6379` | Redis port |
-| `--pass` | _(empty)_ | Redis password / AUTH string |
+| `--pass` | _(empty)_ | Redis password |
 | `--db` | `0` | Database number (0–15) |
-
-**Tip:** Add an alias so you can launch it in one keystroke:
-
-```sh
-echo "alias lr='lazyredis'" >> ~/.zshrc
-```
+| `--tls` | `false` | Enable TLS |
+| `--tls-skip-verify` | `false` | Skip TLS certificate verification |
+| `--tls-cert` | _(empty)_ | Path to client certificate |
+| `--tls-key` | _(empty)_ | Path to client key |
+| `--tls-ca` | _(empty)_ | Path to CA certificate |
 
 ---
 
 ## Keybindings
 
-### Navigation
+### Tree Navigation
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Move cursor down / up in key list |
-| `↓` / `↑` | Same as j / k |
-| `g` | Jump to top of key list |
-| `G` | Jump to bottom of key list |
-| `ctrl+d` | Page down (10 keys) |
-| `ctrl+u` | Page up (10 keys) |
-| `tab` / `l` | Switch focus to value panel |
-| `h` / `shift+tab` | Switch focus back to key list |
-| `J` / `K` | Move sub-item cursor inside value panel (list rows, hash fields, set members, zset members) |
-| `j` / `k` (value focused) | Scroll value content |
+| `j` / `k` | Move cursor down / up |
+| `enter` | Enter folder |
+| `backspace` | Go up one level |
+| `esc` | Go to tree root |
+| `g` / `G` | Jump to top / bottom |
+| `ctrl+d` / `ctrl+u` | Page down / up (10 items) |
+
+### Multi-Select
+
+| Key | Action |
+|-----|--------|
+| `ctrl+space` | Toggle selection on current item |
+| `J` / `K` | Extend selection range down / up |
+| `d` | Batch delete all selected items |
 
 ### Key Operations
 
 | Key | Action |
 |-----|--------|
-| `n` | Create new key — opens a wizard to choose name, type, and initial value |
-| `d` | Delete selected key (confirmation required) |
-| `R` | Rename selected key |
-| `t` | Set or remove TTL (enter `0` to make persistent) |
-| `c` | Copy selected value / member / field-value to clipboard |
+| `n` | New key (type picker) |
+| `d` | Delete key / folder / selection |
+| `R` | Rename key |
+| `t` | Set / remove TTL |
+| `y` | Copy key name to clipboard |
+| `Y` / `c` | Copy value to clipboard |
 
 ### Value Editing
 
 | Key | Action |
 |-----|--------|
-| `e` | Edit selected item — adapts to the key type: string value, list element by index, hash field+value, zset score+member |
-| `a` | Add new item to list (RPush), hash field, set member, or zset member+score |
-| `D` | Delete selected sub-item (hash field, set member, zset member, or list element) |
+| `tab` / `l` | Focus value panel |
+| `h` / `shift+tab` | Focus key list |
+| `J` / `K` (value focused) | Move sub-item cursor |
+| `e` | Edit selected sub-item |
+| `a` | Add item |
+| `D` | Delete selected sub-item |
+| `j` / `k` (value focused) | Scroll value |
 
-### Filter
+### Search
 
 | Key | Action |
 |-----|--------|
-| `/` | Open filter bar — live fuzzy match as you type |
-| `enter` | Confirm filter (glob patterns: `*`, `?`, `[` trigger server-side SCAN) |
-| `esc` | Clear filter and restore full key list |
+| `/` | Open search — fuzzy match across all keys |
+| `enter` | Confirm (glob patterns `*` `?` `[` trigger server-side SCAN) |
+| `esc` | Close search, return to tree |
 
 ### Global
 
 | Key | Action |
 |-----|--------|
-| `r` | Refresh — reload all keys and server info |
-| `:` | Run a raw Redis command |
-| `[` | Switch to previous database (db-1) |
-| `]` | Switch to next database (db+1) |
-| `1` | Keys tab |
-| `2` | Server info tab |
-| `3` | Help tab |
-| `?` | Open help screen |
+| `p` | Switch connection profile |
+| `S` | Connection settings (host / port / pass / db / TLS / refresh) |
+| `[` / `]` | Switch database (db0–db15) |
+| `r` | Refresh keys + server info |
+| `:` | Run raw Redis command |
+| `1` / `2` / `3` | Tab: Keys / Server / Help |
+| `?` | Help screen |
 | `q` / `ctrl+c` | Quit |
 
 ---
 
-## Configuration
+## Multi-Profile Config
 
-LazyRedis reads a config file from `~/.config/lazyredis/config.yml` (coming soon). Until then, all options are available as CLI flags.
+On first run, LazyRedis creates `~/.config/lazyredis/config.json` with a default `local` profile. Edit it to add more connections:
 
-```yaml
-# ~/.config/lazyredis/config.yml  (upcoming)
-host: 127.0.0.1
-port: 6379
-password: ""
-db: 0
+```json
+{
+  "profiles": [
+    {
+      "name": "local",
+      "host": "127.0.0.1",
+      "port": 6379,
+      "db": 0,
+      "color": "green"
+    },
+    {
+      "name": "staging",
+      "host": "staging.redis.internal",
+      "port": 6379,
+      "password": "stagingpass",
+      "db": 0,
+      "color": "yellow"
+    },
+    {
+      "name": "production",
+      "host": "prod.redis.internal",
+      "port": 6380,
+      "password": "prodpass",
+      "db": 0,
+      "tls": true,
+      "color": "red"
+    }
+  ]
+}
 ```
+
+Available colors: `green`, `blue`, `red`, `yellow`, `purple`, `peach`, `teal`, `pink`, or any hex code (`#a6e3a1`).
+
+Press `p` in the TUI to open the profile selector and switch connections instantly.
 
 ---
 
-## Supported Redis types
+## Supported Redis Types
 
-| Type | View | Add item | Edit item | Delete item |
-|------|------|----------|-----------|-------------|
-| String | ✅ JSON pretty-print | — | ✅ `e` | ✅ `d` (whole key) |
-| List | ✅ indexed rows | ✅ RPush | ✅ LSet | ✅ LRem |
-| Hash | ✅ field/value table | ✅ HSet | ✅ HSet | ✅ HDel |
-| Set | ✅ sorted members | ✅ SAdd | — | ✅ SRem |
-| Sorted Set | ✅ rank/score/member | ✅ ZAdd | ✅ ZRem + ZAdd | ✅ ZRem |
-| Stream | ✅ entry viewer | ✅ XAdd | — | — |
+| Badge | Type | View | Add | Edit | Delete sub-item |
+|-------|------|------|-----|------|-----------------|
+| `STR` | String | ✅ JSON / hex / text | — | ✅ | — |
+| `LST` | List | ✅ indexed rows | ✅ RPush | ✅ LSet | ✅ LRem |
+| `HSH` | Hash | ✅ field/value table | ✅ HSet | ✅ HSet | ✅ HDel |
+| `SET` | Set | ✅ sorted members | ✅ SAdd | — | ✅ SRem |
+| `ZST` | Sorted Set | ✅ rank/score/member | ✅ ZAdd | ✅ ZRem+ZAdd | ✅ ZRem |
+| `STM` | Stream | ✅ entry viewer | — | — | — |
+| `JSON` | RedisJSON | ✅ JSON.GET | — | — | — |
+| `VEC` | Vector Set | ✅ card count | — | — | — |
+| `TS` | Time Series | ✅ TS.INFO | — | — | — |
+
+---
+
+## Project Structure
+
+```
+lazyredis/
+├── main.go
+├── .goreleaser.yaml
+└── pkg/
+    ├── config/
+    │   ├── config.go       # CLI flag parsing
+    │   └── profiles.go     # ~/.config/lazyredis/config.json
+    ├── redis/
+    │   └── client.go       # all Redis operations
+    └── ui/
+        ├── app.go          # bubbletea root model + event loop
+        ├── key_tree.go     # hierarchical key tree builder
+        ├── panel_keys.go   # left panel — tree nav, multi-select, search
+        ├── panel_value.go  # right-top — type-aware value viewer + hex dump
+        ├── panel_info.go   # right-bottom — metadata + command log
+        ├── panel_server.go # server tab — Redis INFO
+        ├── modal.go        # overlay dialogs (confirm, input, profile, connect)
+        ├── overlay.go      # ANSI-aware modal compositing
+        └── styles.go       # Catppuccin Mocha palette + profile colors
+```
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
+Contributions are welcome. Please open an issue first to discuss what you'd like to change.
 
 ```sh
-git clone https://github.com/parksangmin/lazyredis.git
+git clone https://github.com/sm010422/lazyredis.git
 cd lazyredis
-go run main.go          # run from source
-go test ./...           # run tests
+go run main.go
 ```
-
-### Project structure
-
-```
-lazyredis/
-├── main.go                  # entry point, CLI flags
-└── pkg/
-    ├── config/config.go     # flag parsing
-    ├── redis/client.go      # all Redis operations (SCAN, CRUD per type, INFO)
-    └── ui/
-        ├── app.go           # bubbletea root model, event loop, key routing
-        ├── panel_keys.go    # left panel — key list, filter, cursor
-        ├── panel_value.go   # right-top panel — type-aware value viewer
-        ├── panel_info.go    # right-bottom panel — metadata + command log
-        ├── panel_server.go  # server tab — Redis INFO formatted/raw
-        ├── modal.go         # reusable overlay dialogs (confirm, input, wizard)
-        └── styles.go        # Catppuccin Mocha colour palette
-```
-
-### Architecture
-
-LazyRedis uses the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework (Elm architecture) for the TUI. All Redis I/O runs off the main goroutine as `tea.Cmd` functions and communicates back through typed messages (`tea.Msg`). Styles are built with [Lip Gloss](https://github.com/charmbracelet/lipgloss) using the Catppuccin Mocha palette.
-
----
-
-## FAQ
-
-**Does LazyRedis support Redis Cluster?**  
-Not yet. Single-node and Sentinel setups work. Cluster support is planned.
-
-**Is it safe to use in production?**  
-Yes — LazyRedis uses non-blocking `SCAN` for key iteration (never `KEYS *`) and always asks for confirmation before destructive operations. That said, use caution with `:` (raw command mode) as it executes commands directly.
-
-**The type badges aren't showing colours in my terminal.**  
-Make sure your terminal supports 256 colours or true colour. Set `TERM=xterm-256color` or `COLORTERM=truecolor` if needed.
-
-**Can I connect over TLS / Redis Sentinel?**  
-TLS and Sentinel support are on the roadmap. For now, use an SSH tunnel if needed.
 
 ---
 
 ## Alternatives
 
-If LazyRedis doesn't fit your needs, these tools might:
-
 - [redis-tui](https://github.com/mylxsw/redis-tui) — another Redis TUI in Go
-- [RedisInsight](https://redis.com/redis-enterprise/redis-insight/) — official GUI client (desktop app)
-- [redis-cli](https://redis.io/docs/manual/cli/) — the original CLI (no shame in using it)
+- [RedisInsight](https://redis.com/redis-enterprise/redis-insight/) — official GUI client
+- [redis-cli](https://redis.io/docs/manual/cli/) — the original CLI
 
 ---
 
@@ -444,8 +392,6 @@ If LazyRedis doesn't fit your needs, these tools might:
 
 <div align="center">
 
-Built with ❤️ and [Bubble Tea](https://github.com/charmbracelet/bubbletea)
-
-If LazyRedis saves you time, consider giving it a ⭐
+Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) · If LazyRedis saves you time, consider giving it a ⭐
 
 </div>
