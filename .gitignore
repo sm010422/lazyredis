@@ -1,0 +1,8 @@
+# goreleaser build output
+dist/
+
+# Go binaries
+lazyredis
+
+# macOS
+.DS_Store
