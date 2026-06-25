@@ -8,26 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.21-blue)](https://golang.org/)
 
-```
-LazyRedis  ● CONNECTED  db0  63 keys                   redis://127.0.0.1:6379
-    Keys        Server        Help
-╭────────────────────╮╭────────────────────────────────────────────────────────╮
-│Keys  63  /user/    ││user:1:profile  HSH                                     │
-│← backspace  esc    ││FIELD                   VALUE                           │
-│root                ││age                     28                              │
-│  ▶ 1/  (3)         ││city                    Seoul                           │
-│  ▶ 2/  (3)         ││name                    Alice Kim                       │
-│  ▶ 3/  (2)         ││                                                        │
-│                    │╰────────────────────────────────────────────────────────╯
-│                    │╭────────────────────────────────────────────────────────╮
-│                    ││Info                                                    │
-│                    ││Key:     user:1:profile                                 │
-│                    ││Type:     HSH                                           │
-│                    ││TTL:     persistent                                     │
-╰────────────────────╯│Size:    3 elements  Memory: 96 B                      │
-                      ╰────────────────────────────────────────────────────────╯
- j/k navigate  /search  n new  d delete  enter enter dir  ← up  p profile  q quit
-```
+![LazyRedis demo](assets/demo.gif)
 
 </div>
 
