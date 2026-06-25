@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/parksangmin/lazyredis/pkg/config"
-	redisclient "github.com/parksangmin/lazyredis/pkg/redis"
+	"github.com/sm010422/lazyredis/pkg/config"
+	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
 // msgBatchDelete carries a list of keys to remove from the panel after deletion.

@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tidwall/pretty"
 
-	redisclient "github.com/parksangmin/lazyredis/pkg/redis"
+	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
 type ZSetMemberRow struct {

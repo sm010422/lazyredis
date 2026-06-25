@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	redisclient "github.com/parksangmin/lazyredis/pkg/redis"
+	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
 // InfoPanel shows key metadata (type, TTL, memory, size).

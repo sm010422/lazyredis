@@ -5,9 +5,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/parksangmin/lazyredis/pkg/config"
-	redisclient "github.com/parksangmin/lazyredis/pkg/redis"
-	"github.com/parksangmin/lazyredis/pkg/ui"
+	"github.com/sm010422/lazyredis/pkg/config"
+	redisclient "github.com/sm010422/lazyredis/pkg/redis"
+	"github.com/sm010422/lazyredis/pkg/ui"
 )
 
 var version = "0.3.0"

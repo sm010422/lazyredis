@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/parksangmin/lazyredis/pkg/config"
+	"github.com/sm010422/lazyredis/pkg/config"
 	goredis "github.com/redis/go-redis/v9"
 )
 

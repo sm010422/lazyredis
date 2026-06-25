@@ -1,4 +1,4 @@
-module github.com/parksangmin/lazyredis
+module github.com/sm010422/lazyredis
 
 go 1.26.4
 
