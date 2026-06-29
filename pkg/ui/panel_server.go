@@ -63,6 +63,10 @@ func (p *ServerPanel) renderFormatted(width, height, innerW, _ int) string {
 			{"Cache Misses", fmt.Sprintf("%d", si.KeyspaceMisses)},
 			{"Hit Ratio", hitRatio},
 		}},
+		{"Pub/Sub", [][2]string{
+			{"Channels", fmt.Sprintf("%d active", si.PubSubChannels)},
+			{"Patterns", fmt.Sprintf("%d subscribed", si.PubSubPatterns)},
+		}},
 	}
 
 	var lines []string
