@@ -10,10 +10,10 @@ import (
 	"github.com/sm010422/lazyredis/pkg/ui"
 )
 
-var version = "0.3.0"
+var version = "dev"
 
 func main() {
-	cfg := config.Parse()
+	cfg := config.Parse(version)
 
 	// Load saved profiles; errors are non-fatal (fall back to CLI flags).
 	profiles, _ := config.LoadProfiles()
@@ -47,7 +47,6 @@ func main() {
 	defer r.Close()
 
 	app := ui.New(cfg, r, profiles, activeIdx)
-	_ = version
 
 	p := tea.NewProgram(
 		app,

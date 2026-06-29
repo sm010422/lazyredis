@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"os"
 )
 
 type Config struct {
@@ -21,8 +22,13 @@ func (c *Config) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
-func Parse() *Config {
+func Parse(version string) *Config {
 	cfg := &Config{}
+
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&showVersion, "v", false, "print version and exit")
+
 	flag.StringVar(&cfg.Host, "host", "127.0.0.1", "Redis host")
 	flag.IntVar(&cfg.Port, "port", 6379, "Redis port")
 	flag.StringVar(&cfg.Password, "pass", "", "Redis password")
@@ -33,5 +39,11 @@ func Parse() *Config {
 	flag.StringVar(&cfg.TLSKey, "tls-key", "", "Path to TLS client key file")
 	flag.StringVar(&cfg.TLSCA, "tls-ca", "", "Path to TLS CA certificate file")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("lazyredis %s\n", version)
+		os.Exit(0)
+	}
+
 	return cfg
 }
