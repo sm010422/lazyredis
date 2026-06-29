@@ -57,18 +57,26 @@ type StreamEntry struct {
 }
 
 type ServerInfo struct {
-	Version        string
-	Mode           string
-	OS             string
-	Arch           string
-	UptimeSecs     int64
+	Version          string
+	Mode             string
+	OS               string
+	Arch             string
+	UptimeSecs       int64
 	ConnectedClients int64
-	UsedMemory     string
-	TotalKeys      int64
-	KeyspaceHits   int64
-	KeyspaceMisses int64
-	TotalCommands  int64
-	Role           string
+	UsedMemory       string
+	TotalKeys        int64
+	KeyspaceHits     int64
+	KeyspaceMisses   int64
+	TotalCommands    int64
+	Role             string
+	PubSubChannels   int64
+	PubSubPatterns   int64
+}
+
+type PubSubStats struct {
+	Channels    []string
+	ChannelSubs map[string]int64
+	NumPatterns int64
 }
 
 type Client struct {
@@ -446,9 +454,46 @@ func (c *Client) GetServerInfo() (*ServerInfo, error) {
 			info.KeyspaceMisses, _ = strconv.ParseInt(v, 10, 64)
 		case "role":
 			info.Role = v
+		case "pubsub_channels":
+			info.PubSubChannels, _ = strconv.ParseInt(v, 10, 64)
+		case "pubsub_patterns":
+			info.PubSubPatterns, _ = strconv.ParseInt(v, 10, 64)
 		}
 	}
 	return info, nil
+}
+
+func (c *Client) GetPubSubStats() (*PubSubStats, error) {
+	channels, err := c.rdb.PubSubChannels(c.ctx, "*").Result()
+	if err != nil {
+		return nil, err
+	}
+	stats := &PubSubStats{
+		Channels:    channels,
+		ChannelSubs: make(map[string]int64),
+	}
+	if len(channels) > 0 {
+		numsub, err := c.rdb.PubSubNumSub(c.ctx, channels...).Result()
+		if err == nil {
+			for ch, n := range numsub {
+				stats.ChannelSubs[ch] = n
+			}
+		}
+	}
+	numpat, err := c.rdb.PubSubNumPat(c.ctx).Result()
+	if err == nil {
+		stats.NumPatterns = numpat
+	}
+	sort.Strings(stats.Channels)
+	return stats, nil
+}
+
+func (c *Client) Subscribe(channels ...string) *goredis.PubSub {
+	return c.rdb.Subscribe(c.ctx, channels...)
+}
+
+func (c *Client) Publish(channel, message string) error {
+	return c.rdb.Publish(c.ctx, channel, message).Err()
 }
 
 func (c *Client) GetRawInfo(section string) (string, error) {
