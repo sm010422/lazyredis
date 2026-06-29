@@ -30,9 +30,10 @@ const (
 	tabKeys tabID = iota
 	tabServer
 	tabHelp
+	tabPubSub
 )
 
-var tabLabels = []string{"  Keys  ", "  Server  ", "  Help  "}
+var tabLabels = []string{"  Keys  ", "  Server  ", "  Help  ", "  PubSub  "}
 
 // ---- focus ----
 
@@ -99,6 +100,15 @@ type msgSettingsApplied struct {
 	interval time.Duration
 }
 type msgClearStatus struct{ gen int }
+type msgPubSubStats struct {
+	stats *redisclient.PubSubStats
+	err   error
+}
+type msgPubSubMessage struct {
+	channel string
+	payload string
+}
+type msgPubSubDone struct{}
 
 // ---- App ----
 
@@ -128,6 +138,7 @@ type App struct {
 	value  ValueView
 	info   InfoPanel
 	server ServerPanel
+	pubsub PubSubPanel
 
 	// modal
 	modal *Modal
@@ -150,6 +161,7 @@ func New(cfg *config.Config, r *redisclient.Client, profiles []config.Profile, a
 		cfg:              cfg,
 		redis:            r,
 		keys:             newKeysPanel(),
+		pubsub:           newPubSubPanel(),
 		typeCache:        make(map[string]string),
 		currentDB:        cfg.DB,
 		refreshInterval:  2 * time.Second,
@@ -331,6 +343,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.typeCache = make(map[string]string)
 		a.keys = newKeysPanel()
 		a.value.Reset()
+		if a.pubsub.Sub != nil {
+			a.pubsub.Sub.Close()
+			a.pubsub.Sub = nil
+		}
+		a.pubsub = newPubSubPanel()
 		if msg.profileIdx >= 0 {
 			a.activeProfileIdx = msg.profileIdx
 		}
@@ -343,6 +360,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		statusCmd := a.setStatus(fmt.Sprintf("Connected to %s db%d%s", msg.cfg.Addr(), msg.cfg.DB, tlsInfo), false)
 		return a, tea.Batch(statusCmd, a.loadKeys(), a.loadServerInfo(), a.tickCmd())
+
+	case msgPubSubStats:
+		if msg.err == nil {
+			a.pubsub.Stats = msg.stats
+		}
+		return a, nil
+
+	case msgPubSubMessage:
+		a.pubsub.AddMessage(msg.channel, msg.payload)
+		return a, a.waitPubSubMsg()
+
+	case msgPubSubDone:
+		// closed externally (connection lost, not manual unsubscribe)
+		if a.pubsub.Sub != nil {
+			a.pubsub.Sub = nil
+			a.pubsub.SubChannel = ""
+			return a, a.setStatus("Pub/Sub subscription ended", false)
+		}
+		return a, nil
 
 	case msgBatchDeleted:
 		if msg.err != nil {
@@ -391,6 +427,10 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global keys
 	switch key {
 	case "ctrl+c", "q":
+		if a.pubsub.Sub != nil {
+			a.pubsub.Sub.Close()
+			a.pubsub.Sub = nil
+		}
 		return a, tea.Quit
 	case "1":
 		a.tab = tabKeys
@@ -401,6 +441,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		a.tab = tabHelp
 		return a, nil
+	case "4":
+		a.tab = tabPubSub
+		return a, a.loadPubSubStats()
 	}
 
 	switch a.tab {
@@ -413,6 +456,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.tab = tabKeys
 		}
 		return a, nil
+	case tabPubSub:
+		return a.handlePubSubTab(key)
 	}
 
 	return a, nil
@@ -728,6 +773,87 @@ func (a *App) handleServerTab(key string) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) handlePubSubTab(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "tab", "l", "h":
+		a.pubsub.focusLeft = !a.pubsub.focusLeft
+		return a, nil
+
+	case "j", "down":
+		if a.pubsub.focusLeft {
+			a.pubsub.MoveDown()
+		} else {
+			a.pubsub.ScrollMsgDown()
+		}
+		return a, nil
+
+	case "k", "up":
+		if a.pubsub.focusLeft {
+			a.pubsub.MoveUp()
+		} else {
+			a.pubsub.ScrollMsgUp()
+		}
+		return a, nil
+
+	case "r":
+		return a, a.loadPubSubStats()
+
+	case "s":
+		sel := a.pubsub.Selected()
+		if sel == "" {
+			return a, a.setStatus("No channel selected", true)
+		}
+		if a.pubsub.SubChannel == sel {
+			if a.pubsub.Sub != nil {
+				a.pubsub.Sub.Close()
+				a.pubsub.Sub = nil
+			}
+			a.pubsub.SubChannel = ""
+			return a, a.setStatus("Unsubscribed from "+sel, false)
+		}
+		if a.pubsub.Sub != nil {
+			a.pubsub.Sub.Close()
+		}
+		sub := a.redis.Subscribe(sel)
+		a.pubsub.Sub = sub
+		a.pubsub.SubChannel = sel
+		a.pubsub.Messages = nil
+		a.pubsub.msgScroll = -1
+		return a, tea.Batch(a.setStatus("Subscribed to "+sel, false), a.waitPubSubMsg())
+
+	case "P":
+		sel := a.pubsub.Selected()
+		a.modal = NewDoubleInputModal("Publish Message", "channel", "message", func(r ModalResult) tea.Cmd {
+			if !r.Confirmed || len(r.Values) < 2 {
+				return nil
+			}
+			ch, msg := strings.TrimSpace(r.Values[0]), r.Values[1]
+			if ch == "" {
+				return func() tea.Msg { return msgStatus{text: "Channel name is required", isError: true} }
+			}
+			return func() tea.Msg {
+				if err := a.redis.Publish(ch, msg); err != nil {
+					return msgStatus{text: "Publish error: " + err.Error(), isError: true}
+				}
+				return msgStatus{text: fmt.Sprintf("Published to '%s'", ch), isError: false}
+			}
+		})
+		if sel != "" {
+			a.modal.inputs[0].SetValue(sel)
+			a.modal.inputs[1].Focus()
+			a.modal.inputs[0].Blur()
+		}
+		return a, textinput.Blink
+
+	case "S":
+		return a, a.openConnectModal()
+
+	case "p":
+		return a, a.openProfileModal()
+	}
+	return a, nil
+}
+
 func (a *App) openProfileModal() tea.Cmd {
 	if len(a.profiles) == 0 {
 		return func() tea.Msg {
@@ -908,7 +1034,6 @@ func (a *App) loadValueData(key string, info *redisclient.KeyInfo) tea.Cmd {
 			return msgStringValue{val: val}
 		}
 	}
-	return nil
 }
 
 func (a *App) loadServerInfo() tea.Cmd {
@@ -919,6 +1044,24 @@ func (a *App) loadServerInfo() tea.Cmd {
 		}
 		raw, _ := a.redis.GetRawInfo("")
 		return msgServerInfo{info: info, rawInfo: raw}
+	}
+}
+
+func (a *App) loadPubSubStats() tea.Cmd {
+	return func() tea.Msg {
+		stats, err := a.redis.GetPubSubStats()
+		return msgPubSubStats{stats: stats, err: err}
+	}
+}
+
+func (a *App) waitPubSubMsg() tea.Cmd {
+	sub := a.pubsub.Sub
+	return func() tea.Msg {
+		msg, ok := <-sub.Channel()
+		if !ok {
+			return msgPubSubDone{}
+		}
+		return msgPubSubMessage{channel: msg.Channel, payload: msg.Payload}
 	}
 }
 
@@ -1484,6 +1627,8 @@ func (a *App) View() string {
 		body = a.server.Render(a.width, bodyH)
 	case tabHelp:
 		body = a.renderHelp(bodyH)
+	case tabPubSub:
+		body = a.pubsub.Render(a.width, bodyH)
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, statusBar)
@@ -1661,13 +1806,20 @@ func (a *App) renderHelp(height int) string {
 			{"enter", "confirm filter"},
 			{"esc", "clear filter"},
 		}},
+		{"Pub/Sub (tab 4)", [][]string{
+			{"j / k", "navigate channel list"},
+			{"tab / l / h", "switch focus (channels ↔ messages)"},
+			{"s", "subscribe / unsubscribe selected channel"},
+			{"P", "publish a message to a channel"},
+			{"r", "refresh channel list"},
+		}},
 		{"Global", [][]string{
 			{":", "run raw Redis command"},
 			{"p", "switch connection profile"},
 			{"S", "open connection settings (host / port / pass / db / TLS)"},
 			{"[  ]", "switch database (db0-db15)"},
 			{"r", "refresh keys + server info"},
-			{"1 / 2 / 3", "tab: Keys / Server / Help"},
+			{"1 / 2 / 3 / 4", "tab: Keys / Server / Help / PubSub"},
 			{"q / ctrl+c", "quit"},
 		}},
 	}
