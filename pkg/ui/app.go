@@ -28,12 +28,12 @@ type tabID int
 
 const (
 	tabKeys tabID = iota
+	tabPubSub
 	tabServer
 	tabHelp
-	tabPubSub
 )
 
-var tabLabels = []string{"  Keys  ", "  Server  ", "  Help  ", "  PubSub  "}
+var tabLabels = []string{"  Keys  ", "  PubSub  ", "  Server  ", "  Help  "}
 
 // ---- focus ----
 
@@ -436,19 +436,21 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.tab = tabKeys
 		return a, nil
 	case "2":
-		a.tab = tabServer
-		return a, a.loadServerInfo()
-	case "3":
-		a.tab = tabHelp
-		return a, nil
-	case "4":
 		a.tab = tabPubSub
 		return a, a.loadPubSubStats()
+	case "3":
+		a.tab = tabServer
+		return a, a.loadServerInfo()
+	case "4":
+		a.tab = tabHelp
+		return a, nil
 	}
 
 	switch a.tab {
 	case tabKeys:
 		return a.handleKeysTab(key)
+	case tabPubSub:
+		return a.handlePubSubTab(key)
 	case tabServer:
 		return a.handleServerTab(key)
 	case tabHelp:
@@ -456,8 +458,6 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.tab = tabKeys
 		}
 		return a, nil
-	case tabPubSub:
-		return a.handlePubSubTab(key)
 	}
 
 	return a, nil
@@ -1623,12 +1623,12 @@ func (a *App) View() string {
 	switch a.tab {
 	case tabKeys:
 		body = a.renderKeysLayout(bodyH)
+	case tabPubSub:
+		body = a.pubsub.Render(a.width, bodyH)
 	case tabServer:
 		body = a.server.Render(a.width, bodyH)
 	case tabHelp:
 		body = a.renderHelp(bodyH)
-	case tabPubSub:
-		body = a.pubsub.Render(a.width, bodyH)
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left, header, tabs, body, statusBar)
@@ -1819,7 +1819,7 @@ func (a *App) renderHelp(height int) string {
 			{"S", "open connection settings (host / port / pass / db / TLS)"},
 			{"[  ]", "switch database (db0-db15)"},
 			{"r", "refresh keys + server info"},
-			{"1 / 2 / 3 / 4", "tab: Keys / Server / Help / PubSub"},
+			{"1 / 2 / 3 / 4", "tab: Keys / PubSub / Server / Help"},
 			{"q / ctrl+c", "quit"},
 		}},
 	}
