@@ -42,19 +42,6 @@ changelog:
       - Merge pull request
       - Merge branch
 
-brews:
-  - name: lazyredis
-    repository:
-      owner: sm010422
-      name: homebrew-lazyredis
-    homepage: "https://github.com/sm010422/lazyredis"
-    description: "Lazygit-inspired terminal UI for Redis"
-    license: "MIT"
-    install: |
-      bin.install "lazyredis"
-    test: |
-      assert_predicate bin/"lazyredis", :exist?
-
 release:
   github:
     owner: sm010422
