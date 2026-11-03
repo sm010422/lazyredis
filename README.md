@@ -4,6 +4,7 @@
 
 **A lazygit-inspired terminal UI for Redis**
 
+[![CI](https://github.com/sm010422/lazyredis/actions/workflows/ci.yml/badge.svg)](https://github.com/sm010422/lazyredis/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/sm010422/lazyredis?color=blue)](https://github.com/sm010422/lazyredis/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.21-blue)](https://golang.org/)
@@ -31,6 +32,7 @@ You're debugging a production issue at 2am. You fire up `redis-cli` and type `KE
 - [Multi-Profile Config](#multi-profile-config)
 - [Supported Redis Types](#supported-redis-types)
 - [Project Structure](#project-structure)
+- [Development](#development)
 - [Contributing](#contributing)
 
 ---
@@ -324,36 +326,69 @@ Press `p` in the TUI to open the profile selector and switch connections instant
 ```
 lazyredis/
 ├── main.go
+├── Makefile                  # lint / test / test-redis / build, same as CI
+├── .golangci.yml
 ├── .goreleaser.yaml
+├── .github/workflows/
+│   ├── ci.yml                # lint, tests (Linux + macOS, real Redis), build check
+│   └── release.yml           # tag → GoReleaser → Homebrew tap update
 └── pkg/
     ├── config/
-    │   ├── config.go       # CLI flag parsing
-    │   └── profiles.go     # ~/.config/lazyredis/config.json
+    │   ├── config.go         # CLI flag parsing
+    │   └── profiles.go       # ~/.config/lazyredis/config.json (mode 0600)
     ├── redis/
-    │   └── client.go       # all Redis operations
+    │   └── client.go         # all Redis operations
     └── ui/
-        ├── app.go          # bubbletea root model + event loop
-        ├── key_tree.go     # hierarchical key tree builder
-        ├── panel_keys.go   # left panel — tree nav, multi-select, search
-        ├── panel_value.go  # right-top — type-aware value viewer + hex dump
-        ├── panel_info.go   # right-bottom — metadata + command log
-        ├── panel_server.go # server tab — Redis INFO
-        ├── modal.go        # overlay dialogs (confirm, input, profile, connect)
-        ├── overlay.go      # ANSI-aware modal compositing
-        └── styles.go       # Catppuccin Mocha palette + profile colors
+        ├── app.go            # bubbletea root model + message loop
+        ├── app_handlers.go   # key handling per tab
+        ├── app_commands.go   # tea.Cmds that talk to Redis
+        ├── app_view.go       # header, tabs, status bar, help
+        ├── key_tree.go       # hierarchical key tree builder
+        ├── panel_keys.go     # left panel — tree nav, multi-select, search
+        ├── panel_value.go    # right-top — type-aware value viewer + hex dump
+        ├── panel_info.go     # right-bottom — metadata + command log
+        ├── panel_server.go   # server tab — Redis INFO
+        ├── panel_pubsub.go   # pub/sub tab — channels + live messages
+        ├── modal.go          # overlay dialogs (confirm, input, profile, connect)
+        ├── overlay.go        # ANSI- and wide-char-aware modal compositing
+        ├── text.go           # truncation and padding by terminal cell width
+        └── styles.go         # Catppuccin Mocha palette + profile colors
 ```
 
 ---
 
-## Contributing
+## Development
 
-Contributions are welcome. Please open an issue first to discuss what you'd like to change.
+Requires Go (version in `go.mod`) and, for linting, [golangci-lint](https://golangci-lint.run) v2.
 
 ```sh
 git clone https://github.com/sm010422/lazyredis.git
 cd lazyredis
-go run main.go
+go run .            # connects to 127.0.0.1:6379
+make test           # unit tests + client tests against in-process miniredis
+make lint           # go mod tidy check + golangci-lint
 ```
+
+`make test` needs nothing else installed: every client test starts its own
+[miniredis](https://github.com/alicebob/miniredis). miniredis does not
+implement everything (for example `MEMORY USAGE` and DB index limits), so the
+same tests can run against a real server:
+
+```sh
+redis-server --port 6399 --save '' &
+make test-redis REDIS_ADDR=127.0.0.1:6399   # uses DB 15 and flushes it
+```
+
+CI runs lint, `go test -race` on Linux and macOS, the client tests against
+Redis 7.4 and 8.2, and a GoReleaser snapshot build on every pull request.
+
+Text in the UI is measured in terminal cells, not bytes: Hangul and CJK are
+two cells wide and styled strings carry ANSI escapes. Use the helpers in
+`pkg/ui/text.go` instead of slicing strings.
+
+## Contributing
+
+Contributions are welcome. Please open an issue first to discuss what you'd like to change, and run `make lint test` before sending a pull request.
 
 ---
 

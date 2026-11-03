@@ -9,3 +9,6 @@ lazyredis
 
 # Claude Code project memory
 .claude/
+
+# go test -coverprofile output
+coverage.out
