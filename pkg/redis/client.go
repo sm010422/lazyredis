@@ -420,6 +420,12 @@ func (c *Client) GetServerInfo() (*ServerInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseServerInfo(raw), nil
+}
+
+// parseServerInfo extracts the fields shown in the Server tab from the raw
+// INFO reply. Unknown fields and section headers are ignored.
+func parseServerInfo(raw string) *ServerInfo {
 	info := &ServerInfo{}
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -460,7 +466,7 @@ func (c *Client) GetServerInfo() (*ServerInfo, error) {
 			info.PubSubPatterns, _ = strconv.ParseInt(v, 10, 64)
 		}
 	}
-	return info, nil
+	return info
 }
 
 func (c *Client) GetPubSubStats() (*PubSubStats, error) {
