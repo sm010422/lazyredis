@@ -527,14 +527,10 @@ func (p *KeysPanel) Render(width, height int, active bool, typeMap map[string]st
 				badge = keyTypeBadge(typ)
 
 				maxKeyLen := innerW - lipgloss.Width(badge) - 2
-				if len(label) > maxKeyLen {
-					label = label[:maxKeyLen-1] + "…"
-				}
+				label = truncateWidth(label, maxKeyLen)
 			} else {
 				// dir
-				if len(label) > innerW-1 {
-					label = label[:innerW-2] + "…"
-				}
+				label = truncateWidth(label, innerW-1)
 			}
 
 			selMark := "  "

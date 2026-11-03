@@ -238,11 +238,3 @@ func (a *App) renderHelp(height int) string {
 	content := strings.Join(lines, "\n")
 	return styleBorder.Width(a.width - 2).Height(height - 2).Render(content)
 }
-
-func truncate(s string, n int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-1] + "…"
-}

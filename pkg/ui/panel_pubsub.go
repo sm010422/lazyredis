@@ -132,9 +132,7 @@ func (p *PubSubPanel) renderChannelList(width, height int) string {
 			if maxLabel < 4 {
 				maxLabel = 4
 			}
-			if len(label) > maxLabel {
-				label = label[:maxLabel-1] + "…"
-			}
+			label = truncateWidth(label, maxLabel)
 
 			subscribed := ch == p.SubChannel
 
@@ -185,9 +183,7 @@ func (p *PubSubPanel) renderMessageLog(width, height int) string {
 		if maxPay < 4 {
 			maxPay = 4
 		}
-		if len(payload) > maxPay {
-			payload = payload[:maxPay-1] + "…"
-		}
+		payload = truncateWidth(payload, maxPay)
 		msgLines = append(msgLines, timeStr+chTag+" "+payload)
 	}
 

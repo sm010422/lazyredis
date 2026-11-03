@@ -227,9 +227,7 @@ func (v *ValueView) renderList(w, h int) string {
 	for i, item := range v.listItems {
 		idxStr := styleMuted.Render(fmt.Sprintf("%4d ", i))
 		val := item
-		if len(val) > w-6 {
-			val = val[:w-7] + "…"
-		}
+		val = truncateWidth(val, w-6)
 		row := idxStr + styleInfo.Render(val)
 		if i == v.subCursor {
 			row = styleSelected.Width(w).Render(fmt.Sprintf("%4d %s", i, val))
@@ -247,21 +245,13 @@ func (v *ValueView) renderHash(w, h int) string {
 	lines := make([]string, len(v.hashKeys))
 	for i, k := range v.hashKeys {
 		val := v.hashFields[k]
-		fk := k
-		if len(fk) > colW {
-			fk = fk[:colW-1] + "…"
-		}
-		fv := val
-		if len(fv) > w-colW-4 {
-			fv = fv[:w-colW-5] + "…"
-		}
-		row := fmt.Sprintf("%-*s  %s", colW, fk, fv)
+		fk := padRight(truncateWidth(k, colW), colW)
+		fv := truncateWidth(val, w-colW-4)
 		if i == v.subCursor {
-			row = styleSelected.Width(w).Render(fmt.Sprintf("%-*s  %s", colW, fk, fv))
+			lines[i] = styleSelected.Width(w).Render(fk + "  " + fv)
 		} else {
-			row = keyTypeStyle("hash").Render(fmt.Sprintf("%-*s", colW, fk)) + "  " + styleInfo.Render(fv)
+			lines[i] = keyTypeStyle("hash").Render(fk) + "  " + styleInfo.Render(fv)
 		}
-		lines[i] = row
 	}
 	header := styleMuted.Render(fmt.Sprintf("%-*s  %s", colW, "FIELD", "VALUE"))
 	all := append([]string{header}, lines...)
@@ -275,9 +265,7 @@ func (v *ValueView) renderSet(w, h int) string {
 	lines := make([]string, len(v.setMembers))
 	for i, m := range v.setMembers {
 		val := m
-		if len(val) > w-2 {
-			val = val[:w-3] + "…"
-		}
+		val = truncateWidth(val, w-2)
 		if i == v.subCursor {
 			lines[i] = styleSelected.Width(w).Render(val)
 		} else {
@@ -296,9 +284,7 @@ func (v *ValueView) renderZSet(w, h int) string {
 	for i, z := range v.zsetItems {
 		score := fmt.Sprintf("%-*g", scoreW, z.Score)
 		member := z.Member
-		if len(member) > w-scoreW-4 {
-			member = member[:w-scoreW-5] + "…"
-		}
+		member = truncateWidth(member, w-scoreW-4)
 		if i == v.subCursor {
 			lines[i] = styleSelected.Width(w).Render(fmt.Sprintf("%4d  %-*s  %s", i+1, scoreW, score, member))
 		} else {
@@ -333,11 +319,7 @@ func (v *ValueView) paginate(lines []string, w, h int) string {
 
 	var result []string
 	for _, l := range visible {
-		if lipgloss.Width(l) > w {
-			result = append(result, l[:w])
-		} else {
-			result = append(result, l)
-		}
+		result = append(result, clipWidth(l, w))
 	}
 
 	if len(lines) > h {
