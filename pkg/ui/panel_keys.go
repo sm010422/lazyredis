@@ -391,15 +391,7 @@ func (p *KeysPanel) RemoveKey(key string) {
 	p.allKeys = newKeys
 	delete(p.selected, key)
 	p.rebuildNodes()
-
-	// If current path is now empty, go up.
-	if len(p.nodes) == 0 && len(p.pathSegs) > 0 {
-		p.ExitDir()
-	}
-
-	if p.cursor >= p.listLen() && p.cursor > 0 {
-		p.cursor--
-	}
+	p.leaveEmptyDirs()
 }
 
 func (p *KeysPanel) RemoveKeys(keys []string) {
@@ -416,7 +408,14 @@ func (p *KeysPanel) RemoveKeys(keys []string) {
 	}
 	p.allKeys = newKeys
 	p.rebuildNodes()
-	if len(p.nodes) == 0 && len(p.pathSegs) > 0 {
+	p.leaveEmptyDirs()
+}
+
+// leaveEmptyDirs climbs out of the current directory while it has no keys
+// left. Deleting the only key under a:b:c empties both a:b and a, so one
+// ExitDir is not enough.
+func (p *KeysPanel) leaveEmptyDirs() {
+	for len(p.nodes) == 0 && len(p.pathSegs) > 0 {
 		p.ExitDir()
 	}
 	if p.cursor >= p.listLen() && p.cursor > 0 {
