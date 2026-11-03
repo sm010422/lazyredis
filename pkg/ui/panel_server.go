@@ -81,9 +81,7 @@ func (p *ServerPanel) renderFormatted(width, height, innerW, _ int) string {
 			label := styleInfo.Render(fmt.Sprintf("  %-18s", r[0]+":"))
 			val := styleBold.Render(r[1])
 			line := label + val
-			if len(line) > innerW {
-				line = line[:innerW]
-			}
+			line = clipWidth(line, innerW)
 			lines = append(lines, line)
 		}
 		lines = append(lines, "")
@@ -109,9 +107,7 @@ func (p *ServerPanel) renderRaw(width, height, innerW, innerH int) string {
 		} else if strings.Contains(l, ":") {
 			parts := strings.SplitN(l, ":", 2)
 			line := styleInfo.Render(parts[0]+":") + styleBold.Render(parts[1])
-			if len(line) > innerW {
-				line = line[:innerW]
-			}
+			line = clipWidth(line, innerW)
 			visible = append(visible, line)
 		} else {
 			visible = append(visible, l)

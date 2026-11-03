@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // overlayCenter renders fg centered over bg, keeping background content
@@ -55,88 +56,18 @@ func overlayCenter(bg, fg string) string {
 // overlayLine overlays fg on top of bg at visual column `at`, keeping
 // background characters outside the fg span.
 func overlayLine(bg, fg string, at, bgW int) string {
-	bgVisible := lipgloss.Width(bg)
-	if bgVisible < bgW {
-		bg += strings.Repeat(" ", bgW-bgVisible)
-	}
+	bg = padRight(bg, bgW)
+	fgW := lipgloss.Width(fg)
 
-	left := ansiCut(bg, 0, at)
-	right := ansiCut(bg, at+lipgloss.Width(fg), bgW)
+	// A wide character (Hangul, CJK) that straddles either edge of fg is
+	// dropped by the cut, so pad each side back to its expected width to
+	// keep the right-hand border in place.
+	left := padRight(ansi.Cut(bg, 0, at), at)
+	right := ansi.Cut(bg, at+fgW, bgW)
+	if gap := bgW - at - fgW - lipgloss.Width(right); gap > 0 {
+		right = strings.Repeat(" ", gap) + right
+	}
 
 	// Reset between sections to prevent ANSI colour bleeding.
 	return left + "\x1b[0m" + fg + "\x1b[0m" + right
-}
-
-// ansiCut returns visible characters in [from, to) from an ANSI string.
-func ansiCut(s string, from, to int) string {
-	if from >= to {
-		return ""
-	}
-	return ansiTake(ansiDrop(s, from), to-from)
-}
-
-// ansiTake returns the first n visible characters of s, preserving ANSI codes.
-func ansiTake(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	var buf strings.Builder
-	vis := 0
-	runes := []rune(s)
-	for i := 0; i < len(runes); {
-		if esc, j := parseEscape(runes, i); esc {
-			buf.WriteString(string(runes[i:j]))
-			i = j
-		} else {
-			if vis >= n {
-				break
-			}
-			buf.WriteRune(runes[i])
-			vis++
-			i++
-		}
-	}
-	return buf.String()
-}
-
-// ansiDrop skips the first n visible characters of s, preserving ANSI state
-// by keeping the escape codes from the dropped portion as a prefix.
-func ansiDrop(s string, n int) string {
-	if n <= 0 {
-		return s
-	}
-	var codes strings.Builder
-	vis := 0
-	runes := []rune(s)
-	i := 0
-	for i < len(runes) && vis < n {
-		if esc, j := parseEscape(runes, i); esc {
-			codes.WriteString(string(runes[i:j]))
-			i = j
-		} else {
-			vis++
-			i++
-		}
-	}
-	return codes.String() + string(runes[i:])
-}
-
-// parseEscape checks if position i is the start of an ANSI CSI escape sequence.
-// Returns (true, end) or (false, i).
-func parseEscape(runes []rune, i int) (bool, int) {
-	if i+1 >= len(runes) || runes[i] != '\x1b' || runes[i+1] != '[' {
-		return false, i
-	}
-	j := i + 2
-	for j < len(runes) && !isANSIFinal(runes[j]) {
-		j++
-	}
-	if j < len(runes) {
-		j++
-	}
-	return true, j
-}
-
-func isANSIFinal(r rune) bool {
-	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
 }

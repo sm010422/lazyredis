@@ -5,6 +5,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/sm010422/lazyredis/pkg/config"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 	"github.com/sm010422/lazyredis/pkg/ui"

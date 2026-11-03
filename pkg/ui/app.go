@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/sm010422/lazyredis/pkg/config"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
@@ -92,6 +93,7 @@ type msgSettingsApplied struct {
 	interval time.Duration
 }
 type msgClearStatus struct{ gen int }
+type msgDBSwitched struct{ db int }
 type msgPubSubStats struct {
 	stats *redisclient.PubSubStats
 	err   error
@@ -278,6 +280,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case msgStatus:
 		return a, a.setStatus(msg.text, msg.isError)
 
+	case msgDBSwitched:
+		// The previous DB's keys, tree path and selection mean nothing here,
+		// and with auto-refresh off nothing else would reload the list.
+		a.currentDB = msg.db
+		a.value.Reset()
+		a.typeCache = make(map[string]string)
+		a.keys.ClearSelection()
+		a.keys.GoRoot()
+		a.keys.SetKeys(nil)
+		n, _ := a.redis.DBSize()
+		a.dbSize = n
+		return a, tea.Batch(
+			a.setStatus(fmt.Sprintf("Switched to DB %d", msg.db), false),
+			a.loadKeys(),
+		)
+
 	case msgCmdResult:
 		entry := "> " + msg.cmd
 		var statusCmd tea.Cmd
@@ -334,7 +352,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.keys = newKeysPanel()
 		a.value.Reset()
 		if a.pubsub.Sub != nil {
-			a.pubsub.Sub.Close()
+			_ = a.pubsub.Sub.Close()
 			a.pubsub.Sub = nil
 		}
 		a.pubsub = newPubSubPanel()

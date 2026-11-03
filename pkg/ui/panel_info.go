@@ -44,9 +44,7 @@ func (p InfoPanel) Render(width, height int, info *redisclient.KeyInfo, cmdLog [
 			start = len(cmdLog) - logH
 		}
 		for _, l := range cmdLog[start:] {
-			if len(l) > innerW {
-				l = l[:innerW-1] + "…"
-			}
+			l = truncateWidth(l, innerW)
 			lines = append(lines, styleInfo.Render(l))
 		}
 	}

@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/charmbracelet/lipgloss"
+	goredis "github.com/redis/go-redis/v9"
+
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
@@ -17,9 +18,9 @@ type pubSubMessage struct {
 }
 
 type PubSubPanel struct {
-	Stats      *redisclient.PubSubStats
-	cursor     int
-	focusLeft  bool
+	Stats     *redisclient.PubSubStats
+	cursor    int
+	focusLeft bool
 
 	Sub        *goredis.PubSub
 	SubChannel string
@@ -63,10 +64,6 @@ func (p *PubSubPanel) AddMessage(ch, payload string) {
 	p.Messages = append(p.Messages, pubSubMessage{Channel: ch, Payload: payload, At: time.Now()})
 	if len(p.Messages) > 500 {
 		p.Messages = p.Messages[len(p.Messages)-500:]
-	}
-	// keep pinned to bottom unless user has manually scrolled up
-	if p.msgScroll == -1 {
-		// stays pinned
 	}
 }
 
@@ -132,9 +129,7 @@ func (p *PubSubPanel) renderChannelList(width, height int) string {
 			if maxLabel < 4 {
 				maxLabel = 4
 			}
-			if len(label) > maxLabel {
-				label = label[:maxLabel-1] + "…"
-			}
+			label = truncateWidth(label, maxLabel)
 
 			subscribed := ch == p.SubChannel
 
@@ -185,9 +180,7 @@ func (p *PubSubPanel) renderMessageLog(width, height int) string {
 		if maxPay < 4 {
 			maxPay = 4
 		}
-		if len(payload) > maxPay {
-			payload = payload[:maxPay-1] + "…"
-		}
+		payload = truncateWidth(payload, maxPay)
 		msgLines = append(msgLines, timeStr+chTag+" "+payload)
 	}
 
