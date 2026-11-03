@@ -337,14 +337,12 @@ func (a *App) switchDB(db int) tea.Cmd {
 		a.setStatus(fmt.Sprintf("DB must be 0-15 (got %d)", db), true)
 		return nil
 	}
+	r := a.redis
 	return func() tea.Msg {
-		if err := a.redis.SelectDB(db); err != nil {
+		if err := r.SelectDB(db); err != nil {
 			return msgStatus{text: "DB switch failed: " + err.Error(), isError: true}
 		}
-		a.currentDB = db
-		a.value.Reset()
-		a.typeCache = make(map[string]string)
-		return msgStatus{text: fmt.Sprintf("Switched to DB %d", db), isError: false}
+		return msgDBSwitched{db: db}
 	}
 }
 

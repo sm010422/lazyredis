@@ -93,6 +93,7 @@ type msgSettingsApplied struct {
 	interval time.Duration
 }
 type msgClearStatus struct{ gen int }
+type msgDBSwitched struct{ db int }
 type msgPubSubStats struct {
 	stats *redisclient.PubSubStats
 	err   error
@@ -278,6 +279,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case msgStatus:
 		return a, a.setStatus(msg.text, msg.isError)
+
+	case msgDBSwitched:
+		// The previous DB's keys, tree path and selection mean nothing here,
+		// and with auto-refresh off nothing else would reload the list.
+		a.currentDB = msg.db
+		a.value.Reset()
+		a.typeCache = make(map[string]string)
+		a.keys.ClearSelection()
+		a.keys.GoRoot()
+		a.keys.SetKeys(nil)
+		n, _ := a.redis.DBSize()
+		a.dbSize = n
+		return a, tea.Batch(
+			a.setStatus(fmt.Sprintf("Switched to DB %d", msg.db), false),
+			a.loadKeys(),
+		)
 
 	case msgCmdResult:
 		entry := "> " + msg.cmd
