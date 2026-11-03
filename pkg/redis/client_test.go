@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -355,18 +356,71 @@ func TestBatchUnlinkDeletesAcrossChunks(t *testing.T) {
 	must(t, c.BatchUnlink(nil))
 }
 
-func TestSelectDBIsolatesKeys(t *testing.T) {
+func TestSelectDBAppliesToEveryPooledConnection(t *testing.T) {
 	c := newTestClient(t)
-	must(t, c.SetString("only-in-15", "v", 0))
-
 	must(t, c.SelectDB(14))
-	t.Cleanup(func() { _ = c.SelectDB(testDB) })
-	must(t, c.FlushDB())
+	t.Cleanup(func() {
+		_ = c.FlushDB()
+		_ = c.SelectDB(testDB)
+	})
 
-	n, err := c.DBSize()
-	must(t, err)
-	if n != 0 {
-		t.Errorf("DBSize in DB 14 = %d, want 0", n)
+	// The UI refreshes in the background while the user works, so commands
+	// run concurrently and use different pooled connections. Every one of
+	// them must hit the selected DB.
+	const n = 50
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- c.SetString(fmt.Sprintf("k%d", i), "v", 0)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		must(t, err)
+	}
+
+	if got, _ := c.DBSize(); got != n {
+		t.Errorf("DB 14 has %d keys, want %d", got, n)
+	}
+	if got := c.DB(); got != 14 {
+		t.Errorf("DB() = %d, want 14", got)
+	}
+
+	must(t, c.SelectDB(testDB))
+	if got, _ := c.DBSize(); got != 0 {
+		t.Errorf("DB %d has %d keys, want 0 (writes leaked out of DB 14)", testDB, got)
+	}
+}
+
+func TestSelectDBInvalidKeepsCurrentDB(t *testing.T) {
+	if !usingRealRedis() {
+		t.Skip("miniredis accepts any DB index; set " + testRedisAddrEnv + " to run")
+	}
+	c := newTestClient(t)
+	must(t, c.SetString("k", "v", 0))
+
+	if err := c.SelectDB(9999); err == nil {
+		t.Fatal("SelectDB(9999) err = nil, want an error")
+	}
+	if got := c.DB(); got != testDB {
+		t.Errorf("DB() = %d after failed switch, want %d", got, testDB)
+	}
+	if ok, _ := c.Exists("k"); !ok {
+		t.Error("key in the current DB is no longer visible after a failed switch")
+	}
+}
+
+func TestCopyStaysInCurrentDB(t *testing.T) {
+	c := newTestClient(t)
+	must(t, c.SetString("src", "v", 0))
+	must(t, c.Copy("src", "dst"))
+
+	if ok, _ := c.Exists("dst"); !ok {
+		t.Error("Copy did not create dst in the current DB")
 	}
 }
 
