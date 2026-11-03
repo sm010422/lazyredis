@@ -14,6 +14,7 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
 	"github.com/sm010422/lazyredis/pkg/config"
 )
 
@@ -175,7 +176,7 @@ func (c *Client) GetKeyTypes(keys []string) map[string]string {
 	for i, k := range keys {
 		cmds[i] = pipe.Type(c.ctx, k)
 	}
-	pipe.Exec(c.ctx) //nolint:errcheck — individual cmd errors handled below
+	_, _ = pipe.Exec(c.ctx) // per-command errors are checked below
 	result := make(map[string]string, len(keys))
 	for i, k := range keys {
 		if cmds[i].Err() == nil {

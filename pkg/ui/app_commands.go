@@ -10,6 +10,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/sm010422/lazyredis/pkg/config"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )

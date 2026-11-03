@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
@@ -26,7 +27,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "ctrl+c", "q":
 		if a.pubsub.Sub != nil {
-			a.pubsub.Sub.Close()
+			_ = a.pubsub.Sub.Close()
 			a.pubsub.Sub = nil
 		}
 		return a, tea.Quit
@@ -163,9 +164,10 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case "J":
-		if a.focus == focusValue {
+		switch a.focus {
+		case focusValue:
 			a.value.SubDown(a.subItemCount())
-		} else if a.focus == focusKeyList {
+		case focusKeyList:
 			a.keys.ExtendSelectDown()
 			if sel := a.keys.SelectedKey(); sel != "" {
 				return a, a.selectKey(sel)
@@ -174,9 +176,10 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case "K":
-		if a.focus == focusValue {
+		switch a.focus {
+		case focusValue:
 			a.value.SubUp()
-		} else if a.focus == focusKeyList {
+		case focusKeyList:
 			a.keys.ExtendSelectUp()
 			if sel := a.keys.SelectedKey(); sel != "" {
 				return a, a.selectKey(sel)
@@ -393,14 +396,14 @@ func (a *App) handlePubSubTab(key string) (tea.Model, tea.Cmd) {
 		}
 		if a.pubsub.SubChannel == sel {
 			if a.pubsub.Sub != nil {
-				a.pubsub.Sub.Close()
+				_ = a.pubsub.Sub.Close()
 				a.pubsub.Sub = nil
 			}
 			a.pubsub.SubChannel = ""
 			return a, a.setStatus("Unsubscribed from "+sel, false)
 		}
 		if a.pubsub.Sub != nil {
-			a.pubsub.Sub.Close()
+			_ = a.pubsub.Sub.Close()
 		}
 		sub := a.redis.Subscribe(sel)
 		a.pubsub.Sub = sub

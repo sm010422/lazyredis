@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - errorlint # compare and wrap errors with errors.Is/As and %w
+    - misspell
+    - nolintlint # every //nolint needs a linter name and a reason
+    - unconvert
+    - usestdlibvars
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/sm010422/lazyredis

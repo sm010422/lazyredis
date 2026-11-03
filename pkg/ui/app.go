@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/sm010422/lazyredis/pkg/config"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
@@ -334,7 +335,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.keys = newKeysPanel()
 		a.value.Reset()
 		if a.pubsub.Sub != nil {
-			a.pubsub.Sub.Close()
+			_ = a.pubsub.Sub.Close()
 			a.pubsub.Sub = nil
 		}
 		a.pubsub = newPubSubPanel()

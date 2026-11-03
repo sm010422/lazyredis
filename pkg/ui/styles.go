@@ -91,10 +91,6 @@ var (
 				PaddingLeft(2).
 				PaddingRight(2)
 
-	styleStatusNormal = lipgloss.NewStyle().
-				Foreground(colorText).
-				Background(colorSurface)
-
 	styleStatusError = lipgloss.NewStyle().
 				Foreground(colorRed).
 				Background(colorSurface).

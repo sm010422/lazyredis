@@ -272,9 +272,10 @@ func (m *Modal) Update(msg tea.KeyMsg) (*Modal, tea.Cmd) {
 			})
 		default:
 			var cmd tea.Cmd
-			if m.focused == 0 {
+			switch m.focused {
+			case 0:
 				m.inputs[0], cmd = m.inputs[0].Update(msg)
-			} else if m.focused == 2 {
+			case 2:
 				m.inputs[1], cmd = m.inputs[1].Update(msg)
 			}
 			return m, cmd

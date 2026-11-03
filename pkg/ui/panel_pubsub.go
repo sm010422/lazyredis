@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	goredis "github.com/redis/go-redis/v9"
+
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
@@ -63,10 +64,6 @@ func (p *PubSubPanel) AddMessage(ch, payload string) {
 	p.Messages = append(p.Messages, pubSubMessage{Channel: ch, Payload: payload, At: time.Now()})
 	if len(p.Messages) > 500 {
 		p.Messages = p.Messages[len(p.Messages)-500:]
-	}
-	// keep pinned to bottom unless user has manually scrolled up
-	if p.msgScroll == -1 {
-		// stays pinned
 	}
 }
 
