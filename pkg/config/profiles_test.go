@@ -112,6 +112,26 @@ func TestToConfigCopiesConnectionFields(t *testing.T) {
 	}
 }
 
+func TestSaveProfilesIsOwnerReadableOnly(t *testing.T) {
+	useConfigDir(t)
+	// A file left by an older version that wrote 0644.
+	writeConfig(t, `{"profiles": []}`)
+
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(SaveProfiles([]Profile{{Name: "prod", Host: "h", Port: 1, Password: "secret"}}))
+
+	info, err := os.Stat(ProfilesPath())
+	must(err)
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("config file mode = %o, want 600 (it can contain passwords)", mode)
+	}
+}
+
 func writeConfig(t *testing.T, content string) {
 	t.Helper()
 	path := ProfilesPath()

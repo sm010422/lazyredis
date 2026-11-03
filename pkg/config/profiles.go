@@ -67,16 +67,23 @@ func LoadProfiles() ([]Profile, error) {
 	return f.Profiles, nil
 }
 
+// SaveProfiles writes profiles to ProfilesPath. Profiles can hold Redis
+// passwords, so the file is readable by the owner only.
 func SaveProfiles(profiles []Profile) error {
 	path := ProfilesPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(profileFile{Profiles: profiles}, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	// WriteFile keeps the mode of an existing file, so tighten files
+	// created by older versions with 0644.
+	return os.Chmod(path, 0o600)
 }
 
 func defaultProfiles() []Profile {
