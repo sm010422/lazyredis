@@ -3,20 +3,20 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	colorGreen   = lipgloss.Color("#a6e3a1")
-	colorBlue    = lipgloss.Color("#89b4fa")
-	colorRed     = lipgloss.Color("#f38ba8")
-	colorYellow  = lipgloss.Color("#f9e2af")
-	colorPurple  = lipgloss.Color("#cba6f7")
-	colorPeach   = lipgloss.Color("#fab387")
-	colorTeal    = lipgloss.Color("#89dceb")
-	colorMuted   = lipgloss.Color("#585b70")
-	colorText    = lipgloss.Color("#cdd6f4")
-	colorSubtext = lipgloss.Color("#a6adc8")
-	colorBorder  = lipgloss.Color("#45475a")
+	colorGreen        = lipgloss.Color("#a6e3a1")
+	colorBlue         = lipgloss.Color("#89b4fa")
+	colorRed          = lipgloss.Color("#f38ba8")
+	colorYellow       = lipgloss.Color("#f9e2af")
+	colorPurple       = lipgloss.Color("#cba6f7")
+	colorPeach        = lipgloss.Color("#fab387")
+	colorTeal         = lipgloss.Color("#89dceb")
+	colorMuted        = lipgloss.Color("#585b70")
+	colorText         = lipgloss.Color("#cdd6f4")
+	colorSubtext      = lipgloss.Color("#a6adc8")
+	colorBorder       = lipgloss.Color("#45475a")
 	colorBorderActive = lipgloss.Color("#89b4fa")
-	colorBg2     = lipgloss.Color("#181825")
-	colorSurface = lipgloss.Color("#313244")
+	colorBg2          = lipgloss.Color("#181825")
+	colorSurface      = lipgloss.Color("#313244")
 
 	styleBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -40,20 +40,20 @@ var (
 				Background(colorPurple).
 				Bold(true)
 
-	colorPink    = lipgloss.Color("#f5c2e7")
+	colorPink = lipgloss.Color("#f5c2e7")
 
 	styleKeyTypes = map[string]lipgloss.Style{
-		"string":      lipgloss.NewStyle().Foreground(colorGreen),
-		"list":        lipgloss.NewStyle().Foreground(colorBlue),
-		"set":         lipgloss.NewStyle().Foreground(colorYellow),
-		"zset":        lipgloss.NewStyle().Foreground(colorPurple),
-		"hash":        lipgloss.NewStyle().Foreground(colorPeach),
-		"stream":      lipgloss.NewStyle().Foreground(colorTeal),
-		"ReJSON-RL":   lipgloss.NewStyle().Foreground(colorPink),
-		"json":        lipgloss.NewStyle().Foreground(colorPink),
-		"vectorset":   lipgloss.NewStyle().Foreground(colorTeal),
-		"TSDB-TYPE":   lipgloss.NewStyle().Foreground(colorSubtext),
-		"none":        lipgloss.NewStyle().Foreground(colorMuted),
+		"string":    lipgloss.NewStyle().Foreground(colorGreen),
+		"list":      lipgloss.NewStyle().Foreground(colorBlue),
+		"set":       lipgloss.NewStyle().Foreground(colorYellow),
+		"zset":      lipgloss.NewStyle().Foreground(colorPurple),
+		"hash":      lipgloss.NewStyle().Foreground(colorPeach),
+		"stream":    lipgloss.NewStyle().Foreground(colorTeal),
+		"ReJSON-RL": lipgloss.NewStyle().Foreground(colorPink),
+		"json":      lipgloss.NewStyle().Foreground(colorPink),
+		"vectorset": lipgloss.NewStyle().Foreground(colorTeal),
+		"TSDB-TYPE": lipgloss.NewStyle().Foreground(colorSubtext),
+		"none":      lipgloss.NewStyle().Foreground(colorMuted),
 	}
 
 	styleBadgeTypes = map[string]lipgloss.Style{

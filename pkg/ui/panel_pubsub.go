@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/charmbracelet/lipgloss"
+	goredis "github.com/redis/go-redis/v9"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
 )
 
@@ -17,9 +17,9 @@ type pubSubMessage struct {
 }
 
 type PubSubPanel struct {
-	Stats      *redisclient.PubSubStats
-	cursor     int
-	focusLeft  bool
+	Stats     *redisclient.PubSubStats
+	cursor    int
+	focusLeft bool
 
 	Sub        *goredis.PubSub
 	SubChannel string

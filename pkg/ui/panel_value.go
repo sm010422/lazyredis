@@ -18,9 +18,9 @@ type ZSetMemberRow struct {
 // ValueView is the right-side panel showing a key's value.
 // It is purely a renderer — all data is set by the app model.
 type ValueView struct {
-	Key     string
-	Info    *redisclient.KeyInfo
-	scroll  int
+	Key    string
+	Info   *redisclient.KeyInfo
+	scroll int
 
 	// Structured data for type-specific sub-selection
 	listItems  []string
@@ -43,13 +43,13 @@ func (v *ValueView) Reset() {
 	v.zsetItems = nil
 }
 
-func (v *ValueView) SetList(items []string)              { v.listItems = items; v.subCursor = 0 }
+func (v *ValueView) SetList(items []string) { v.listItems = items; v.subCursor = 0 }
 func (v *ValueView) SetHash(fields map[string]string, keys []string) {
 	v.hashFields = fields
 	v.hashKeys = keys
 	v.subCursor = 0
 }
-func (v *ValueView) SetSet(members []string)             { v.setMembers = members; v.subCursor = 0 }
+func (v *ValueView) SetSet(members []string)       { v.setMembers = members; v.subCursor = 0 }
 func (v *ValueView) SetZSet(items []ZSetMemberRow) { v.zsetItems = items; v.subCursor = 0 }
 
 func (v *ValueView) ScrollDown() { v.scroll++ }
@@ -71,7 +71,7 @@ func (v *ValueView) SubUp() {
 	}
 }
 
-func (v *ValueView) SelectedListIdx() int    { return v.subCursor }
+func (v *ValueView) SelectedListIdx() int { return v.subCursor }
 func (v *ValueView) SelectedHashField() string {
 	if v.hashKeys == nil || v.subCursor >= len(v.hashKeys) {
 		return ""

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sm010422/lazyredis/pkg/config"
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/sm010422/lazyredis/pkg/config"
 )
 
 // noopLogger silences go-redis internal connection pool error logs so they
@@ -39,11 +39,11 @@ const (
 )
 
 type KeyInfo struct {
-	Name    string
-	Type    KeyType
-	TTL     time.Duration
-	Size    int64
-	Memory  int64
+	Name   string
+	Type   KeyType
+	TTL    time.Duration
+	Size   int64
+	Memory int64
 }
 
 type ZSetMember struct {

@@ -14,9 +14,9 @@ type modalKind int
 const (
 	modalNone modalKind = iota
 	modalConfirm
-	modalInput        // single text input
-	modalInputDouble  // two text inputs (field + value)
-	modalNewKey       // create key: name + type + value
+	modalInput       // single text input
+	modalInputDouble // two text inputs (field + value)
+	modalNewKey      // create key: name + type + value
 	modalRename
 	modalTTL
 	modalCommand // raw command
