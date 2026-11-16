@@ -450,8 +450,19 @@ func TestPubSub(t *testing.T) {
 	t.Cleanup(func() { _ = sub.Close() })
 	msgs := sub.Channel()
 
-	stats, err := c.GetPubSubStats()
-	must(t, err)
+	// Channel() sends SUBSCRIBE in the background, so the server may not
+	// have registered it yet. Poll instead of checking once.
+	var stats *PubSubStats
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var err error
+		stats, err = c.GetPubSubStats()
+		must(t, err)
+		if stats.ChannelSubs["news"] == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !reflect.DeepEqual(stats.Channels, []string{"news"}) || stats.ChannelSubs["news"] != 1 {
 		t.Errorf("GetPubSubStats = %+v, want news with 1 subscriber", stats)
 	}
