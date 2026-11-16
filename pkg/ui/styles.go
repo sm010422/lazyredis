@@ -93,12 +93,14 @@ var (
 
 	styleStatusError = lipgloss.NewStyle().
 				Foreground(colorRed).
-				Background(colorSurface).
 				Bold(true)
 
 	styleStatusSuccess = lipgloss.NewStyle().
-				Foreground(colorGreen).
-				Background(colorSurface)
+				Foreground(colorGreen)
+
+	// bottom bar hints: plain text, lazygit style
+	styleBarDesc = lipgloss.NewStyle().Foreground(colorSubtext)
+	styleBarKey  = lipgloss.NewStyle().Foreground(colorBlue)
 
 	styleHintKey = lipgloss.NewStyle().
 			Foreground(colorBg2).

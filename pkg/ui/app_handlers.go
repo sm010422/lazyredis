@@ -40,7 +40,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		a.tab = tabServer
 		return a, a.loadServerInfo()
-	case "4":
+	case "4", "?":
+		if a.tab == tabHelp {
+			if key == "?" {
+				a.tab = a.prevTab
+			}
+			return a, nil
+		}
+		a.prevTab = a.tab
 		a.tab = tabHelp
 		return a, nil
 	}
@@ -53,8 +60,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tabServer:
 		return a.handleServerTab(key)
 	case tabHelp:
-		if key == "esc" || key == "q" {
-			a.tab = tabKeys
+		if key == "esc" {
+			a.tab = a.prevTab
 		}
 		return a, nil
 	}
@@ -335,10 +342,6 @@ func (a *App) handleKeysTab(key string) (tea.Model, tea.Cmd) {
 
 	case "]":
 		return a, a.switchDB(a.currentDB + 1)
-
-	case "?":
-		a.tab = tabHelp
-		return a, nil
 
 	case "S":
 		return a, a.openConnectModal()

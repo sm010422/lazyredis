@@ -142,6 +142,9 @@ type App struct {
 	// modal
 	modal *Modal
 
+	// tab to return to when the help tab is closed
+	prevTab tabID
+
 	// status bar
 	statusText string
 	statusErr  bool

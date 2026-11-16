@@ -143,25 +143,63 @@ func (a *App) renderStatusBar() string {
 	} else if a.statusText != "" {
 		content = styleStatusSuccess.Render(" ✓ " + a.statusText)
 	} else {
-		hints := [][]string{
-			{"j/k", "navigate"}, {"/", "search"}, {"n", "new"},
-			{"d", "delete"}, {"e", "edit"}, {"a", "add"},
-			{"D", "del item"}, {"R", "rename"}, {"t", "TTL"},
-			{"y", "copy key"}, {"Y", "copy val"}, {":", "cmd"},
-			{"J/K", "range sel"}, {"ctrl+space", "select"},
-			{"enter", "enter dir"}, {"←", "up dir"},
-			{"[/]", "DB"}, {"p", "profile"}, {"S", "connect"}, {"q", "quit"},
-		}
-		var parts []string
-		for _, h := range hints {
-			parts = append(parts, styleHintKey.Render(h[0])+" "+styleHintDesc.Render(h[1]))
-		}
-		content = strings.Join(parts, " ")
+		content = renderHints(a.statusHints(), a.width)
 	}
 	return lipgloss.NewStyle().
 		Width(a.width).
-		Background(colorSurface).
+		MaxWidth(a.width).
 		Render(content)
+}
+
+// statusHints returns the few most useful bindings for the current tab and
+// focus, lazygit style. The full list lives behind "?".
+func (a *App) statusHints() [][2]string {
+	var hints [][2]string
+	switch a.tab {
+	case tabKeys:
+		if a.focus == focusValue {
+			hints = [][2]string{
+				{"Edit", "e"}, {"Add", "a"}, {"Delete item", "D"},
+				{"Copy value", "Y"}, {"Back", "h"},
+			}
+		} else {
+			hints = [][2]string{
+				{"Search", "/"}, {"New", "n"}, {"Delete", "d"},
+				{"Rename", "R"}, {"TTL", "t"}, {"Command", ":"},
+			}
+		}
+	case tabPubSub:
+		hints = [][2]string{
+			{"Subscribe", "s"}, {"Publish", "P"}, {"Refresh", "r"}, {"Switch panel", "tab"},
+		}
+	case tabServer:
+		hints = [][2]string{
+			{"Raw", "r"}, {"Refresh", "R"}, {"Connect", "S"},
+		}
+	case tabHelp:
+		return [][2]string{{"Close", "esc/?"}, {"Quit", "q"}}
+	}
+	return append(hints, [2]string{"Keybindings", "?"})
+}
+
+// renderHints joins hints as "Desc: key | Desc: key", dropping hints from the
+// middle until it fits so the trailing "Keybindings: ?" always stays visible.
+func renderHints(hints [][2]string, width int) string {
+	sep := styleMuted.Render(" | ")
+	render := func(hs [][2]string) string {
+		parts := make([]string, len(hs))
+		for i, h := range hs {
+			parts[i] = styleBarDesc.Render(h[0]+": ") + styleBarKey.Render(h[1])
+		}
+		return " " + strings.Join(parts, sep)
+	}
+	for len(hints) > 1 {
+		if out := render(hints); lipgloss.Width(out) <= width {
+			return out
+		}
+		hints = append(hints[:len(hints)-2], hints[len(hints)-1])
+	}
+	return render(hints)
 }
 
 func (a *App) renderHelp(height int) string {
@@ -218,6 +256,7 @@ func (a *App) renderHelp(height int) string {
 			{"[  ]", "switch database (db0-db15)"},
 			{"r", "refresh keys + server info"},
 			{"1 / 2 / 3 / 4", "tab: Keys / PubSub / Server / Help"},
+			{"?", "toggle this keybinding reference"},
 			{"q / ctrl+c", "quit"},
 		}},
 	}

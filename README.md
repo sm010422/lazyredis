@@ -259,7 +259,7 @@ lazyredis --tls
 | `r` | Refresh keys + server info |
 | `:` | Run raw Redis command |
 | `1` / `2` / `3` | Tab: Keys / Server / Help |
-| `?` | Help screen |
+| `?` | Toggle the keybinding reference (from any tab) |
 | `q` / `ctrl+c` | Quit |
 
 ---
