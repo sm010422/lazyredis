@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/sm010422/lazyredis/pkg/config"
 	redisclient "github.com/sm010422/lazyredis/pkg/redis"
@@ -98,11 +99,15 @@ type msgPubSubStats struct {
 	stats *redisclient.PubSubStats
 	err   error
 }
+
+// Pub/Sub messages carry the subscription they came from, so ones that
+// arrive after it was closed or replaced can be told apart and dropped.
 type msgPubSubMessage struct {
+	sub     *goredis.PubSub
 	channel string
 	payload string
 }
-type msgPubSubDone struct{}
+type msgPubSubDone struct{ sub *goredis.PubSub }
 
 // ---- App ----
 
@@ -379,11 +384,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case msgPubSubMessage:
+		if msg.sub == nil || msg.sub != a.pubsub.Sub {
+			return a, nil
+		}
 		a.pubsub.AddMessage(msg.channel, msg.payload)
 		return a, a.waitPubSubMsg()
 
 	case msgPubSubDone:
-		if a.pubsub.Sub != nil {
+		if msg.sub != nil && msg.sub == a.pubsub.Sub {
 			a.pubsub.Sub = nil
 			a.pubsub.SubChannel = ""
 			return a, a.setStatus("Pub/Sub subscription ended", false)

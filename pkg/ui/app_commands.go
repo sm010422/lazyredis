@@ -165,12 +165,15 @@ func (a *App) loadPubSubStats() tea.Cmd {
 
 func (a *App) waitPubSubMsg() tea.Cmd {
 	sub := a.pubsub.Sub
+	if sub == nil {
+		return nil
+	}
 	return func() tea.Msg {
 		msg, ok := <-sub.Channel()
 		if !ok {
-			return msgPubSubDone{}
+			return msgPubSubDone{sub: sub}
 		}
-		return msgPubSubMessage{channel: msg.Channel, payload: msg.Payload}
+		return msgPubSubMessage{sub: sub, channel: msg.Channel, payload: msg.Payload}
 	}
 }
 
